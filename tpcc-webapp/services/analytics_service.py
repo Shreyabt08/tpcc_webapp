@@ -272,7 +272,10 @@ class AnalyticsService:
         ) -> Dict[str, Any]:
         """Get order status for a customer"""
         try:
-            return self.db.get_warehouses("Select * from Warehouses")
+            query ="Select * from Warehouses"
+            result = self.connector.execute_query(query)
+            print(result)
+            return self.db.get_warehouses(result.w_name)
         except Exception as e:
             logger.error(f"Order status service error: {str(e)}")
             return {"success": False, "error": str(e)}
