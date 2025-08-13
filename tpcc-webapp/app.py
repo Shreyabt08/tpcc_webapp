@@ -89,7 +89,7 @@ def dashboard():
         logger.info("   Fetching dashboard metrics...")
         # breakpoint()
         metrics = analytics_service.get_dashboard_metrics()
-        stock = inventory_service.get_low_stock_items()
+        # stock = inventory_service.get_low_stock_items()
         print(f"Stock Qty :{stock}")
         logger.info(f"   ✅ Dashboard metrics retrieved: {len(metrics)} metrics")
         return render_template(

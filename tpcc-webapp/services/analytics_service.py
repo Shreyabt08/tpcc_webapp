@@ -266,6 +266,17 @@ class AnalyticsService:
             "avg_order_value": 0.0,
         }
 
+        
+    def get_warehouses(
+        self
+        ) -> Dict[str, Any]:
+        """Get order status for a customer"""
+        try:
+            return self.db.get_warehouses("Select * from Warehouses")
+        except Exception as e:
+            logger.error(f"Order status service error: {str(e)}")
+            return {"success": False, "error": str(e)}
+        
     def close(self):
         """Close database connections"""
         if self.connector:

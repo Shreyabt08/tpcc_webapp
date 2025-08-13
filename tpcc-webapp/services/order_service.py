@@ -72,6 +72,7 @@ class OrderService:
             logger.error(f"New order service error: {str(e)}")
             return {"success": False, "error": str(e)}
 
+
     def get_order_status(
         self, warehouse_id: int, district_id: int, customer_id: int
     ) -> Dict[str, Any]:
