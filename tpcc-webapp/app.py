@@ -76,6 +76,13 @@ def initialize_services():
 with app.app_context():
     initialize_services()
 
+@app.route('/api/warehouses', methods=['GET'])
+def warehouses_api():
+    try:
+        warehouses_data = analytics_service.get_warehouses()  
+        return {"success": True, "warehouses": warehouses_data}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 @app.route("/")
 def dashboard():
