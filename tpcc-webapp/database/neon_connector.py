@@ -103,9 +103,10 @@
 import logging
 import os
 import psycopg2
-import psycopg2.extras
+import psycopg2.extras 
 from typing import Any, Dict, List, Optional
 from .base_connector import BaseDatabaseConnector
+from psycopg2.extras import RealDictCursor
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +152,21 @@ class NeonConnector(BaseDatabaseConnector):
             logger.error(f"NeonDB query execution failed: {str(e)}")
             raise
 
+    def cursor(self, dictionary=False):
+        if dictionary:
+            return self.connection.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        return self.connection.cursor()
+    
+    def fetch_one(self, query, params=None):
+        with self.connection.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute(query, params or {})
+            return cursor.fetchone()  # Returns a dict or None
+
+    def fetch_all(self, query, params=None):
+        with self.connection.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute(query, params or {})
+            return cursor.fetchall()
+        
     def get_provider_name(self) -> str:
         return self.provider_name
 

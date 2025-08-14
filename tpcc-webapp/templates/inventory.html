@@ -25,7 +25,7 @@
                 <label for="warehouse_id" class="form-label">Warehouse</label>
                 <select class="form-select" id="warehouse_id" name="warehouse_id">
                     <option value="">All Warehouses</option>
-                    {% for warehouse in warehouses %}
+                    {% for warehouse in warehouses.warehouses %}
                     <option value="{{ warehouse.w_id }}" 
                             {% if filters.warehouse_id == warehouse.w_id %}selected{% endif %}>
                         {{ warehouse.w_id }} - {{ warehouse.w_name }}
@@ -35,8 +35,12 @@
             </div>
             <div class="col-md-2">
                 <label for="threshold" class="form-label">Low Stock Threshold</label>
-                <input type="number" class="form-control" id="threshold" name="threshold" 
-                       value="{{ filters.threshold or 10 }}" min="1" max="100">
+                <input type="number" name="threshold" 
+                  value="{{ filters.threshold if filters is defined else 10 }}" 
+                   min="1" max="100">
+
+                <!-- <input type="number" class="form-control" id="threshold" name="threshold" 
+                       value="{{ filters.threshold or 10 }}" min="1" max="100"> -->
             </div>
             <div class="col-md-3">
                 <label for="item_search" class="form-label">Item Search</label>
@@ -97,8 +101,13 @@
         <div class="card text-center">
             <div class="card-body">
                 <h5 class="card-title text-info">
-                    ${{ "%.2f"|format(inventory|sum(attribute='i_price')) }}
+                    ${{ "%.2f"|format(inventory|map('i_price')|default([])|sum) }}
                 </h5>
+
+
+                <!-- <h5 class="card-title text-info">
+                   ${{ "%.2f"|format(inventory|selectattr('i_price')|map('i_price')|sum) }}
+                </h5> -->
                 <p class="card-text">Total Value</p>
             </div>
         </div>
@@ -162,8 +171,10 @@
                     <tr>
                         <td><strong>{{ item.s_i_id }}</strong></td>
                         <td>
-                            <div>{{ item.i_name }}</div>
-                            <small class="text-muted">{{ item.i_data[:50] }}{% if item.i_data|length > 50 %}...{% endif %}</small>
+                         <div>{{ item.get('i_name', '') }}</div>
+                          <small class="text-muted">
+                            {{ item.get('i_data', '')[:50] }}{% if item.get('i_data', '')|length > 50 %}...{% endif %}
+                        </small>
                         </td>
                         <td>
                             <div>{{ item.s_w_id }}</div>
@@ -178,7 +189,11 @@
                             <span class="badge bg-success">{{ item.s_quantity }}</span>
                             {% endif %}
                         </td>
-                        <td>${{ "%.2f"|format(item.i_price) }}</td>
+                        <!-- <td>${{ "%.2f"|format(item.i_price) }}</td> -->
+                        <td>
+                            ${{ "%.2f"|format(inventory|map('i_price')|default([])|sum) }}
+                        </td>
+
                         <td>{{ item.s_ytd }}</td>
                         <td>{{ item.s_order_cnt }}</td>
                         <td>

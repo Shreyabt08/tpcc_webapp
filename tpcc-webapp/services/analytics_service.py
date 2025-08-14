@@ -23,10 +23,14 @@ class AnalyticsService:
     that participants will implement during the study.
     """
 
+    # def __init__(self, db_connector):
+    #     self.db_connector = db_connector
+    #     self.connector = db_connector  # 👈 alias for backward compatibility
     def __init__(self, db_connector):
         self.db_connector = db_connector
-        self.connector = db_connector  # 👈 alias for backward compatibility
-
+        self.connector = db_connector  # alias for backward compatibility
+        self.db = db_connector 
+        
     # def __init__(self):
     #     """Initialize the study analytics service"""
     #     self.connector = None
@@ -123,7 +127,7 @@ class AnalyticsService:
                     customer_count = result[0]["count"]
                 else:
                     customer_count = 0
-                print("Customer_count: {customer_count}") 
+                # print("Customer_count: {customer_count}") 
                 metrics["total_customers"] = customer_count
             except Exception as e:
                 logger.warning(f"Failed to get customer count: {str(e)}")
@@ -266,20 +270,18 @@ class AnalyticsService:
             "avg_order_value": 0.0,
         }
 
-        
     def get_warehouses(
         self
         ) -> Dict[str, Any]:
         """Get order status for a customer"""
         try:
-            query ="Select * from Warehouses"
+            query ="Select * from Warehouse"
             result = self.connector.execute_query(query)
-            print(result)
-            return self.db.get_warehouses(result.w_name)
+            return {"success": True, "warehouses": result}
         except Exception as e:
             logger.error(f"Order status service error: {str(e)}")
             return {"success": False, "error": str(e)}
-        
+
     def close(self):
         """Close database connections"""
         if self.connector:

@@ -72,55 +72,96 @@ class OrderService:
             logger.error(f"New order service error: {str(e)}")
             return {"success": False, "error": str(e)}
 
-
-    def get_order_status(
-        self, warehouse_id: int, district_id: int, customer_id: int
-    ) -> Dict[str, Any]:
-        """Get order status for a customer"""
+    def get_orders(self, warehouse_id=None, district_id=None, customer_id=None, status=None, limit=50, offset=0):
         try:
-            return self.db.get_order_status(warehouse_id, district_id, customer_id)
-        except Exception as e:
-            logger.error(f"Order status service error: {str(e)}")
-            return {"success": False, "error": str(e)}
+            query = """
+                SELECT *,
+                    CASE 
+                        WHEN o_carrier_id IS NULL THEN 'Pending'
+                        ELSE 'Delivered'
+                    END AS status
+                FROM orders
+                WHERE (%(warehouse_id)s IS NULL OR o_w_id = %(warehouse_id)s)
+                AND (%(district_id)s IS NULL OR o_d_id = %(district_id)s)
+                AND (%(customer_id)s IS NULL OR o_c_id = %(customer_id)s)
+                AND (%(status)s IS NULL OR 
+                    (%(status)s = 'Pending' AND o_carrier_id IS NULL) OR
+                    (%(status)s = 'Delivered' AND o_carrier_id IS NOT NULL))
+                ORDER BY o_id DESC
+                LIMIT %(limit)s OFFSET %(offset)s
+            """
 
-    def execute_delivery(self, warehouse_id: int, carrier_id: int) -> Dict[str, Any]:
-        """Execute TPC-C Delivery transaction"""
-        try:
-            return self.db.execute_delivery(warehouse_id, carrier_id)
-        except Exception as e:
-            logger.error(f"Delivery service error: {str(e)}")
-            return {"success": False, "error": str(e)}
-
-    def get_orders(
-        self,
-        warehouse_id: Optional[int] = None,
-        district_id: Optional[int] = None,
-        customer_id: Optional[int] = None,
-        status: Optional[str] = None,
-        limit: int = 50,
-        offset: int = 0,
-    ) -> Dict[str, Any]:
-        """Get orders with optional filters and pagination"""
-        try:
-            return self.db.get_orders(
-                warehouse_id=warehouse_id,
-                district_id=district_id,
-                customer_id=customer_id,
-                status=status,
-                limit=limit,
-                offset=offset,
-            )
-        except Exception as e:
-            logger.error(f"Get orders service error: {str(e)}")
-            return {
-                "orders": [],
-                "total_count": 0,
+            params = {
+                "warehouse_id": warehouse_id,
+                "district_id": district_id,
+                "customer_id": customer_id,
+                "status": status,
                 "limit": limit,
                 "offset": offset,
-                "has_next": False,
-                "has_prev": False,
             }
 
+            with self.db.cursor(dictionary=True) as cursor:
+                cursor.execute(query, params)
+                orders = cursor.fetchall()
+
+            count_query = """
+                SELECT COUNT(*) AS total
+                FROM orders
+                WHERE (%(warehouse_id)s IS NULL OR o_w_id = %(warehouse_id)s)
+                AND (%(district_id)s IS NULL OR o_d_id = %(district_id)s)
+                AND (%(customer_id)s IS NULL OR o_c_id = %(customer_id)s)
+                AND (%(status)s IS NULL OR 
+                    (%(status)s = 'Pending' AND o_carrier_id IS NULL) OR
+                    (%(status)s = 'Delivered' AND o_carrier_id IS NOT NULL))
+            """
+            with self.db.cursor(dictionary=True) as cursor:
+                cursor.execute(count_query, params)
+                total_count = cursor.fetchone()["total"]
+            return {
+                "orders": orders,
+                "total_count": total_count,
+                "has_prev": offset > 0,
+                "has_next": offset + limit < total_count
+            }
+
+        except Exception as e:
+            logger.error(f"Error in get_orders: {str(e)}")
+            raise
+
+    def get_order_status(self, warehouse_id, district_id, customer_id):
+        # Fetch latest order for the customer
+        order_query = """
+            SELECT o_id, o_entry_d, o_carrier_id, c_first, c_middle, c_last, c_balance
+            FROM orders
+            JOIN customer ON o_w_id = c_w_id AND o_d_id = c_d_id AND o_c_id = c_id
+            WHERE o_w_id = %s AND o_d_id = %s AND o_c_id = %s
+            ORDER BY o_id DESC LIMIT 1
+        """
+        order = self.db.fetch_one(order_query, (warehouse_id, district_id, customer_id))
+        print(order)
+        if not order:
+            return {"success": False, "error": "No order found"}
+
+        # Fetch order lines
+        lines_query = """
+            SELECT ol_i_id, i_name, ol_quantity, ol_amount, ol_supply_w_id, ol_delivery_d
+            FROM order_line
+            JOIN item ON ol_i_id = i_id
+            WHERE ol_w_id = %s AND ol_d_id = %s AND ol_o_id = %s
+        """
+        order_lines = self.db.fetch_all(lines_query, (warehouse_id, district_id, order['o_id']))
+
+        return {
+            "success": True,
+            "customer_name": f"{order['c_first']} {order['c_middle']} {order['c_last']}",
+            "customer_balance": order['c_balance'],
+            "order_id": order['o_id'],
+            "order_date": order['o_entry_d'],
+            "carrier_id": order['o_carrier_id'],
+            "order_line_count": len(order_lines),
+            "order_lines": order_lines
+        }
+    
     def get_order_details(
         self, warehouse_id: int, district_id: int, order_id: int
     ) -> Dict[str, Any]:

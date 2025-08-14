@@ -25,7 +25,7 @@
                 <label for="warehouse_id" class="form-label">Warehouse</label>
                 <select class="form-select" id="warehouse_id" name="warehouse_id">
                     <option value="">All Warehouses</option>
-                    {% for warehouse in warehouses %}
+                    {% for warehouse in warehouses.warehouses %}
                     <option value="{{ warehouse.w_id }}" 
                             {% if filters.warehouse_id == warehouse.w_id %}selected{% endif %}>
                         {{ warehouse.w_id }} - {{ warehouse.w_name }}
@@ -47,7 +47,7 @@
                 <label for="status" class="form-label">Status</label>
                 <select class="form-select" id="status" name="status">
                     <option value="">All Status</option>
-                    <option value="new" {% if filters.status == 'new' %}selected{% endif %}>New</option>
+                    <option value="new" {% if filters.status == 'pending' %}selected{% endif %}>Pending</option>
                     <option value="delivered" {% if filters.status == 'delivered' %}selected{% endif %}>Delivered</option>
                 </select>
             </div>
