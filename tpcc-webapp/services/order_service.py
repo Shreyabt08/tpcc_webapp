@@ -14,12 +14,13 @@ logger = logging.getLogger(__name__)
 class OrderService:
     """Service class for order-related operations"""
 
+
     def __init__(
         self, db_connector: BaseDatabaseConnector, region_name: Optional[str] = None
     ):
         self.db = db_connector
         # Get region name from environment variable or use default
-        self.region_name = region_name or os.environ.get("REGION_NAME", "default")
+        self.region_name = region_name or os.environ.get("REGION_NAME", "us-east-1")
 
     def execute_new_order(
         self,
@@ -138,7 +139,6 @@ class OrderService:
             ORDER BY o_id DESC LIMIT 1
         """
         order = self.db.fetch_one(order_query, (warehouse_id, district_id, customer_id))
-        print(order)
         if not order:
             return {"success": False, "error": "No order found"}
 

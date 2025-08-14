@@ -4,6 +4,8 @@ Payment service for TPC-C operations
 
 import logging
 from typing import Any, Dict, List, Optional
+import psycopg2.extras
+from psycopg2.extras import RealDictCursor
 
 from database.base_connector import BaseDatabaseConnector
 
@@ -15,18 +17,25 @@ class PaymentService:
 
     def __init__(self, db_connector: BaseDatabaseConnector):
         self.db = db_connector
+        self.connection = db_connector.connection
 
-    def execute_payment(
-        self, warehouse_id: int, district_id: int, customer_id: int, amount: float
-    ) -> Dict[str, Any]:
-        """Execute TPC-C Payment transaction"""
+    def execute_payment(self, warehouse_id: int, district_id: int, customer_id: int, amount: float):
+        """Run payment transaction in DB"""
         try:
-            return self.db.execute_payment(
-                warehouse_id, district_id, customer_id, amount
-            )
+            with self.connection.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    INSERT INTO History (h_w_id, h_d_id, h_c_id, h_date, h_amount, h_data)
+                    VALUES (%s, %s, %s, NOW(), %s, %s)
+                    RETURNING *;
+                """, (warehouse_id, district_id, customer_id, amount, 'Payment transaction'))
+                
+                self.connection.commit()
+                return cur.fetchone()
         except Exception as e:
-            logger.error(f"Payment service error: {str(e)}")
-            return {"success": False, "error": str(e)}
+            self.connection.rollback()
+            logger.error(f"DB Payment execution error: {e}", exc_info=True)
+            raise
+
 
     def get_payment_history(
         self,
@@ -52,20 +61,59 @@ class PaymentService:
         limit: int = 50,
         offset: int = 0,
     ) -> Dict[str, Any]:
-        """Get payment history with pagination"""
+        """Fetch payment history from the DB with optional filters & pagination."""
+
         try:
-            return self.db.get_payment_history_paginated(
-                warehouse_id, district_id, customer_id, limit, offset
-            )
+            query = """
+                SELECT h_id, h_c_id, h_c_d_id, h_c_w_id, h_d_id, h_w_id, h_date, h_amount, h_data
+                FROM History
+                WHERE (%(warehouse_id)s IS NULL OR h_w_id = %(warehouse_id)s)
+                AND (%(district_id)s IS NULL OR h_d_id = %(district_id)s)
+                AND (%(customer_id)s IS NULL OR h_c_id = %(customer_id)s)
+                ORDER BY h_date DESC
+                LIMIT %(limit)s OFFSET %(offset)s
+            """
+
+            params = {
+                "warehouse_id": warehouse_id,
+                "district_id": district_id,
+                "customer_id": customer_id,
+                "limit": limit,
+                "offset": offset
+            }
+
+            # Fetch all rows as dicts
+            rows = self.db.fetch_all(query, params)
+
+            # Get total count separately
+            count_query = """
+                SELECT COUNT(*) AS total
+                FROM History
+                WHERE (%(warehouse_id)s IS NULL OR h_w_id = %(warehouse_id)s)
+                AND (%(district_id)s IS NULL OR h_d_id = %(district_id)s)
+                AND (%(customer_id)s IS NULL OR h_c_id = %(customer_id)s)
+            """
+            count_result = self.db.fetch_one(count_query, params)
+            total_count = count_result["total"] if count_result else 0
+
+            return {
+                "payments": rows,
+                "total_count": total_count,
+                "limit": limit,
+                "offset": offset,
+                "has_next": (offset + limit) < total_count,
+                "has_prev": offset > 0
+            }
+
         except Exception as e:
-            logger.error(f"Get payment history paginated service error: {str(e)}")
+            logger.error(f"Error loading payments: {str(e)}")
             return {
                 "payments": [],
                 "total_count": 0,
                 "limit": limit,
                 "offset": offset,
                 "has_next": False,
-                "has_prev": False,
+                "has_prev": False
             }
 
     def get_customer_payment_summary(
@@ -135,77 +183,75 @@ class PaymentService:
             logger.error(f"Get customer payment summary service error: {str(e)}")
             return {"success": False, "error": str(e)}
 
-    def get_payment_statistics(
-        self, warehouse_id: Optional[int] = None
+    def get_payment_history_paginated(
+        self,
+        warehouse_id: Optional[int] = None,
+        district_id: Optional[int] = None,
+        customer_id: Optional[int] = None,
+        limit: int = 50,
+        offset: int = 0,
     ) -> Dict[str, Any]:
-        """Get payment statistics"""
+        """Fetch payment history with pagination."""
         try:
-            stats = {}
-
-            # Base query conditions
-            where_clause = "WHERE 1=1"
-            params = []
-
-            if warehouse_id:
-                where_clause += " AND h_w_id = %s"
-                params.append(warehouse_id)
-
-            # Total payments
-            total_query = f"SELECT COUNT(*) as count FROM history {where_clause}"
-            total_result = self.db.execute_query(total_query, tuple(params))
-            stats["total_payments"] = total_result[0]["count"] if total_result else 0
-
-            # Total payment amount
-            amount_query = f"SELECT SUM(h_amount) as total FROM history {where_clause}"
-            amount_result = self.db.execute_query(amount_query, tuple(params))
-            stats["total_payment_amount"] = (
-                float(amount_result[0]["total"])
-                if amount_result and amount_result[0]["total"]
-                else 0.0
-            )
-
-            # Average payment amount
-            avg_query = f"SELECT AVG(h_amount) as avg FROM history {where_clause}"
-            avg_result = self.db.execute_query(avg_query, tuple(params))
-            stats["avg_payment_amount"] = (
-                float(avg_result[0]["avg"])
-                if avg_result and avg_result[0]["avg"]
-                else 0.0
-            )
-
-            # Payments today
-            today_query = f"""
-                SELECT COUNT(*) as count, COALESCE(SUM(h_amount), 0) as amount
-                FROM history 
-                {where_clause} AND DATE(h_date) = CURRENT_DATE
+            where_clause = """
+                WHERE (%(warehouse_id)s IS NULL OR h_w_id = %(warehouse_id)s)
+                  AND (%(district_id)s IS NULL OR h_d_id = %(district_id)s)
+                  AND (%(customer_id)s IS NULL OR h_c_id = %(customer_id)s)
             """
-            today_result = self.db.execute_query(today_query, tuple(params))
-            if today_result:
-                stats["payments_today"] = today_result[0]["count"]
-                stats["payment_amount_today"] = float(today_result[0]["amount"])
-            else:
-                stats["payments_today"] = 0
-                stats["payment_amount_today"] = 0.0
+            params = {
+                "warehouse_id": warehouse_id,
+                "district_id": district_id,
+                "customer_id": customer_id,
+                "limit": limit,
+                "offset": offset,
+            }
 
-            # Top customers by payment amount
-            top_customers_query = f"""
-                SELECT c.c_id, c.c_w_id, c.c_d_id, c.c_first, c.c_middle, c.c_last,
-                       c.c_ytd_payment, c.c_payment_cnt
-                FROM customer c
-                {where_clause.replace("h_w_id", "c.c_w_id")}
-                ORDER BY c.c_ytd_payment DESC
-                LIMIT 5
-            """
-            top_customers_result = self.db.execute_query(
-                top_customers_query, tuple(params)
+            # Fetch payment rows as dicts
+            payments = self.db.fetch_all(
+                f"""
+                SELECT h_id, h_c_id, h_c_d_id, h_c_w_id, 
+                       h_d_id, h_w_id, h_date, h_amount, h_data
+                FROM History
+                {where_clause}
+                ORDER BY h_date DESC
+                LIMIT %(limit)s OFFSET %(offset)s
+                """,
+                params
             )
-            stats["top_customers"] = top_customers_result
 
-            return stats
+            # Fetch total count
+            total_row = self.db.fetch_one(
+                f"SELECT COUNT(*) AS total FROM History {where_clause}",
+                params
+            )
+            total_count = total_row["total"] if total_row else 0
+
+            # Compute total amount here (optional for KPIs)
+            # for p in payments:
+            #     print(f"Payment Service: {payments}")
+            # total_amount = sum(p.get("h_amount", 0) for p in payments)
+
+            return {
+                "payments": payments,
+                "total_count": total_count,
+                "limit": limit,
+                "offset": offset,
+                "has_next": (offset + limit) < total_count,
+                "has_prev": offset > 0,
+                # "total_amount": total_amount
+            }
 
         except Exception as e:
-            logger.error(f"Get payment statistics service error: {str(e)}")
-            return {}
+            logger.error(f"Error loading payments: {e}", exc_info=True)
+            return {
+                "payments": [],
+                "total_count": 0,
+                "limit": limit,
+                "offset": offset,
+                "has_next": False,
+                "has_prev": False,
+                "total_amount": 0
+            }
 
     def get_recent_payments(self, limit: int = 20) -> List[Dict[str, Any]]:
         """Get most recent payments across all warehouses"""

@@ -111,7 +111,6 @@ class AnalyticsService:
                 else:
                     warehouse_count = 0
                 
-                print(f"Total warehouses: {warehouse_count}")
                 metrics["total_warehouses"] = warehouse_count
                 # metrics["total_warehouses"] = result[0]["count"] if result else 0
             except Exception as e:
@@ -138,7 +137,6 @@ class AnalyticsService:
                 result = self.connector.execute_query(
                     "SELECT COUNT(*) as count FROM orders"
                 )
-                # print(result) 
                 metrics["total_orders"] = result[0]["count"] if result else 0
             except Exception as e:
                 logger.warning(f"Failed to get order count: {str(e)}")
@@ -149,7 +147,6 @@ class AnalyticsService:
                 result = self.connector.execute_query(
                     "SELECT COUNT(*) as count FROM item"
                 )
-                # print(result) 
                 metrics["total_items"] = result[0]["count"] if result else 0
             except Exception as e:
                 logger.warning(f"Failed to get item count: {str(e)}")
@@ -260,11 +257,11 @@ class AnalyticsService:
     def _get_default_metrics(self) -> Dict[str, int]:
         """Get default metrics when database is not available"""
         return {
-            "total_warehouses": 10,
-            "total_customers": 10,
-            "total_orders": 10,
-            "total_items": 10,
-            "new_orders": 10,
+            "total_warehouses": 0,
+            "total_customers": 0,
+            "total_orders": 0,
+            "total_items": 0,
+            "new_orders": 0,
             "low_stock_items": 0,
             "orders_last_24h": 0,
             "avg_order_value": 0.0,
@@ -278,6 +275,18 @@ class AnalyticsService:
             query ="Select * from Warehouse"
             result = self.connector.execute_query(query)
             return {"success": True, "warehouses": result}
+        except Exception as e:
+            logger.error(f"Order status service error: {str(e)}")
+            return {"success": False, "error": str(e)}
+    
+    def get_districts(
+        self
+        ) -> Dict[str, Any]:
+        """Get order status for a customer"""
+        try:
+            query ="Select * from District"
+            result = self.connector.execute_query(query)
+            return {"success": True, "districts": result}
         except Exception as e:
             logger.error(f"Order status service error: {str(e)}")
             return {"success": False, "error": str(e)}

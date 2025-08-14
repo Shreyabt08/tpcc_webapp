@@ -154,6 +154,11 @@ def orders():
         warehouses = analytics_service.get_warehouses()
         logger.info(f"   ✅ Retrieved {len(warehouses)} warehouses")
 
+         # Get districts for filter dropdown
+        logger.info("   Fetching districts for dropdown...")
+        districts = analytics_service.get_districts()
+        logger.info(f"✅ Retrieved {len(districts)} districts")
+
         # Calculate pagination info
         total_count = orders_result.get("total_count", 0)
         total_pages = (total_count + limit - 1) // limit if total_count > 0 else 1
@@ -175,6 +180,7 @@ def orders():
             "orders.html",
             orders=orders_result.get("orders", []),
             warehouses=warehouses,
+            districts= districts,
             pagination=pagination,
             filters={
                 "warehouse_id": warehouse_id,
@@ -233,7 +239,6 @@ def inventory():
         limit = request.args.get("limit", 100, type=int)
         page = request.args.get("page", 1, type=int)
 
-        # Calculate offset
         offset = (page - 1) * limit
 
         logger.info(
@@ -251,15 +256,15 @@ def inventory():
         )
         inventory_list = inventory_result.get("inventory", [])
         total_count = inventory_result.get("total_count", 0)
+        logger.info(f"Retrieved {len(inventory_list)} inventory items out of {total_count} total")
 
-        logger.info(
-            f"Retrieved {len(inventory_list)} inventory items out of {total_count} total"
-        )
-
-        # Fetch warehouses for filter dropdown
+        # Get warehouses and districts for filters
         warehouses = analytics_service.get_warehouses()
-        logger.info(f"Retrieved {len(warehouses)} warehouses")
-
+        districts = analytics_service.get_districts()
+      
+        # Calculate total inventory value (safe key access)
+        total_value = sum(item.get('s_quantity', 0) for item in inventory_list)
+        print(total_value)
         # Calculate pagination info
         total_pages = (total_count + limit - 1) // limit if total_count > 0 else 1
         pagination = {
@@ -275,7 +280,6 @@ def inventory():
             "end_item": min(offset + limit, total_count),
         }
 
-        # Build filters dict
         filters = {
             "warehouse_id": warehouse_id,
             "threshold": low_stock_threshold,
@@ -286,7 +290,9 @@ def inventory():
         return render_template(
             "inventory.html",
             inventory=inventory_list,
+            total_value=total_value,
             warehouses=warehouses,
+            districts=districts,
             pagination=pagination,
             filters=filters,
         )
@@ -295,7 +301,7 @@ def inventory():
         logger.error(f"Inventory page error: {str(e)}")
         flash(f"Error loading inventory: {str(e)}", "error")
 
-        # Provide default values to avoid template errors
+        # Provide safe defaults
         default_filters = {"warehouse_id": None, "threshold": 10, "item_search": "", "limit": 100}
         default_pagination = {
             "page": 1,
@@ -313,10 +319,122 @@ def inventory():
         return render_template(
             "inventory.html",
             inventory=[],
+            total_value=0,
             warehouses=[],
+            districts=[],
             pagination=default_pagination,
             filters=default_filters,
         )
+
+# @app.route("/inventory")
+# def inventory():
+#     """Inventory management page"""
+#     try:
+#         logger.info("📦 Inventory page accessed")
+
+#         # Get filter parameters from query
+#         warehouse_id = request.args.get("warehouse_id", type=int)
+#         low_stock_threshold = request.args.get("threshold", 10, type=int)
+#         item_search = request.args.get("item_search")
+#         limit = request.args.get("limit", 100, type=int)
+#         page = request.args.get("page", 1, type=int)
+
+#         # Calculate offset
+#         offset = (page - 1) * limit
+
+#         logger.info(
+#             f"Filters: warehouse_id={warehouse_id}, threshold={low_stock_threshold}, "
+#             f"search='{item_search or ''}', limit={limit}, page={page}"
+#         )
+
+#         # Fetch inventory data with pagination
+#         inventory_result = inventory_service.get_inventory_paginated(
+#             warehouse_id=warehouse_id,
+#             low_stock_threshold=low_stock_threshold,
+#             item_search=item_search,
+#             limit=limit,
+#             offset=offset,
+#         )
+#         inventory_list = inventory_result.get("inventory", [])
+#         total_count = inventory_result.get("total_count", 0)
+#         print(f"App.py : {inventory_list}")
+
+#         logger.info(
+#             f"Retrieved {len(inventory_list)} inventory items out of {total_count} total"
+#         )
+
+#           # Get warehouses for filter dropdown
+#         logger.info("   Fetching warehouses for dropdown...")
+#         warehouses = analytics_service.get_warehouses()
+#         logger.info(f"   ✅ Retrieved {len(warehouses)} warehouses")
+#          # Get districts for filter dropdown
+#         logger.info("   Fetching districts for dropdown...")
+#         districts = analytics_service.get_districts()
+#         logger.info(f"✅ Retrieved {len(districts)} districts")
+#         # # Fetch warehouses for filter dropdown
+#         # warehouses = analytics_service.get_warehouses()
+#         # logger.info(f"Retrieved {len(warehouses)} warehouses")
+
+#         # Calculate pagination info
+#         total_pages = (total_count + limit - 1) // limit if total_count > 0 else 1
+#         pagination = {
+#             "page": page,
+#             "limit": limit,
+#             "total_count": total_count,
+#             "total_pages": total_pages,
+#             "has_prev": inventory_result.get("has_prev", False),
+#             "has_next": inventory_result.get("has_next", False),
+#             "prev_page": page - 1 if page > 1 else None,
+#             "next_page": page + 1 if page < total_pages else None,
+#             "start_item": offset + 1 if total_count > 0 else 0,
+#             "end_item": min(offset + limit, total_count),
+#         }
+
+#         # Build filters dict
+#         filters = {
+#             "warehouse_id": warehouse_id,
+#             "threshold": low_stock_threshold,
+#             "item_search": item_search,
+#             "limit": limit,
+#         }
+#         total_value = sum(item['i_price'] for item in inventory_list)
+#         return render_template(
+#             "inventory.html",
+#             inventory=inventory_list,
+#             total_value = total_value,
+#             warehouses=warehouses,
+#             districts = districts,
+#             pagination=pagination,
+#             filters=filters,
+#         )
+
+#     except Exception as e:
+#         logger.error(f"Inventory page error: {str(e)}")
+#         flash(f"Error loading inventory: {str(e)}", "error")
+
+#         # Provide default values to avoid template errors
+#         default_filters = {"warehouse_id": None, "threshold": 10, "item_search": "", "limit": 100}
+#         default_pagination = {
+#             "page": 1,
+#             "limit": 100,
+#             "total_count": 0,
+#             "total_pages": 1,
+#             "has_prev": False,
+#             "has_next": False,
+#             "prev_page": None,
+#             "next_page": None,
+#             "start_item": 0,
+#             "end_item": 0,
+#         }
+
+#         return render_template(
+#             "inventory.html",
+#             inventory=[],
+#             warehouses=[],
+#             districts = [],
+#             pagination=default_pagination,
+#             filters=default_filters,
+#         )
 
 @app.route("/payments")
 def payments():
@@ -335,7 +453,8 @@ def payments():
         offset = (page - 1) * limit
 
         logger.info(
-            f"   Filters: warehouse_id={warehouse_id}, district_id={district_id}, customer_id={customer_id}, limit={limit}, page={page}"
+            f"   Filters: warehouse_id={warehouse_id}, district_id={district_id}, "
+            f"customer_id={customer_id}, limit={limit}, page={page}"
         )
 
         # Get payment history with pagination
@@ -348,13 +467,18 @@ def payments():
             offset=offset,
         )
         logger.info(
-            f"   ✅ Retrieved {len(payments_result.get('payments', []))} payment records out of {payments_result.get('total_count', 0)} total"
+            f"   ✅ Retrieved {len(payments_result.get('payments', []))} payment records "
+            f"out of {payments_result.get('total_count', 0)} total"
         )
 
         # Get warehouses for filter dropdown
         logger.info("   Fetching warehouses for dropdown...")
         warehouses = analytics_service.get_warehouses()
         logger.info(f"   ✅ Retrieved {len(warehouses)} warehouses")
+
+        logger.info("   Fetching districts for dropdown...")
+        districts = analytics_service.get_districts()
+        logger.info(f"   ✅ Retrieved {len(districts)} districts")
 
         # Calculate pagination info
         total_count = payments_result.get("total_count", 0)
@@ -377,6 +501,7 @@ def payments():
             "payments.html",
             payments=payments_result.get("payments", []),
             warehouses=warehouses,
+            districts=districts,
             pagination=pagination,
             filters={
                 "warehouse_id": warehouse_id,
@@ -385,23 +510,20 @@ def payments():
                 "limit": limit,
             },
         )
+
     except Exception as e:
         logger.error(f"❌ Payments page error: {str(e)}")
         flash(f"Error loading payments: {str(e)}", "error")
 
-        # Ensure we have proper default values for template variables
-        warehouse_id = request.args.get("warehouse_id", type=int)
-        district_id = request.args.get("district_id", type=int)
-        customer_id = request.args.get("customer_id", type=int)
-        limit = request.args.get("limit", 50, type=int)
-
+        # Return empty values to template on error
         return render_template(
             "payments.html",
             payments=[],
             warehouses=[],
+            districts=[],
             pagination={
                 "page": 1,
-                "limit": limit,
+                "limit": 50,
                 "total_count": 0,
                 "total_pages": 1,
                 "has_prev": False,
@@ -412,12 +534,13 @@ def payments():
                 "end_item": 0,
             },
             filters={
-                "warehouse_id": warehouse_id,
-                "district_id": district_id,
-                "customer_id": customer_id,
-                "limit": limit,
+                "warehouse_id": None,
+                "district_id": None,
+                "customer_id": None,
+                "limit": 50,
             },
         )
+
 
 
 # API Endpoints for AJAX operations
@@ -439,7 +562,7 @@ def api_new_order():
         required_fields = ["warehouse_id", "district_id", "customer_id", "items"]
         for field in required_fields:
             if field not in data:
-                logger.error(f"   ❌ Missing required field: {field}")
+                logger.error(f"❌ Missing required field: {field}")
                 return jsonify({"error": f"Missing required field: {field}"}), 400
 
         logger.info(
@@ -561,13 +684,15 @@ def api_stock_level(warehouse_id: int, district_id: int):
         result = inventory_service.get_stock_level(
             warehouse_id=warehouse_id, district_id=district_id, threshold=threshold
         )
+        # If result is None or empty, return 0
+        if not result or not result.get("data"):
+            return jsonify({"success": True, "data": 0})
 
         return jsonify(result)
 
     except Exception as e:
         logger.error(f"Stock level API error: {str(e)}")
-        return jsonify({"error": str(e)}), 500
-
+        return jsonify({"success": False, "error": str(e)}), 500
 
 # Testing and Validation Endpoints
 

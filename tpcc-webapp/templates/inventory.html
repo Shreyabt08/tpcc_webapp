@@ -101,13 +101,8 @@
         <div class="card text-center">
             <div class="card-body">
                 <h5 class="card-title text-info">
-                    ${{ "%.2f"|format(inventory|map('i_price')|default([])|sum) }}
+                   ${{ "%.2f"|format(inventory|selectattr('s_order_cnt')|map('s_order_cnt')|sum) }}
                 </h5>
-
-
-                <!-- <h5 class="card-title text-info">
-                   ${{ "%.2f"|format(inventory|selectattr('i_price')|map('i_price')|sum) }}
-                </h5> -->
                 <p class="card-text">Total Value</p>
             </div>
         </div>
@@ -189,10 +184,8 @@
                             <span class="badge bg-success">{{ item.s_quantity }}</span>
                             {% endif %}
                         </td>
-                        <!-- <td>${{ "%.2f"|format(item.i_price) }}</td> -->
-                        <td>
-                            ${{ "%.2f"|format(inventory|map('i_price')|default([])|sum) }}
-                        </td>
+                        <td>${{ "%.2f"|format(item.s_order_cnt) }}</td>
+                        
 
                         <td>{{ item.s_ytd }}</td>
                         <td>{{ item.s_order_cnt }}</td>
@@ -332,7 +325,7 @@
                     <div class="mb-3">
                         <label for="stock_warehouse_id" class="form-label">Warehouse *</label>
                         <select class="form-select" id="stock_warehouse_id" required>
-                            {% for warehouse in warehouses %}
+                            {% for warehouse in warehouses.warehouses %}
                             <option value="{{ warehouse.w_id }}">{{ warehouse.w_id }} - {{ warehouse.w_name }}</option>
                             {% endfor %}
                         </select>
@@ -340,9 +333,10 @@
                     <div class="mb-3">
                         <label for="stock_district_id" class="form-label">District *</label>
                         <select class="form-select" id="stock_district_id" required>
-                            {% for i in range(1, 11) %}
-                            <option value="{{ i }}">District {{ i }}</option>
-                            {% endfor %}
+                                {% for districts in districts.districts %}
+                                  <option value="{{ districts.d_id }}">{{ districts.d_id }} - {{ districts.d_name }}</option>
+                                <!-- <option value="{{ i }}">District {{ i }}</option> -->
+                                {% endfor %}
                         </select>
                     </div>
                     <div class="mb-3">

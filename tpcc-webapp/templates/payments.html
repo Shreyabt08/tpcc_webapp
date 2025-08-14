@@ -25,7 +25,7 @@
                 <label for="warehouse_id" class="form-label">Warehouse</label>
                 <select class="form-select" id="warehouse_id" name="warehouse_id">
                     <option value="">All Warehouses</option>
-                    {% for warehouse in warehouses %}
+                    {% for warehouse in warehouses.warehouses %}
                     <option value="{{ warehouse.w_id }}" 
                             {% if filters.warehouse_id == warehouse.w_id %}selected{% endif %}>
                         {{ warehouse.w_id }} - {{ warehouse.w_name }}
@@ -35,8 +35,14 @@
             </div>
             <div class="col-md-2">
                 <label for="district_id" class="form-label">District</label>
-                <input type="number" class="form-control" id="district_id" name="district_id" 
-                       value="{{ filters.district_id or '' }}" min="1" max="10" placeholder="1-10">
+                <select class="form-select" id="stock_district_id" required>
+                                {% for districts in districts.districts %}
+                                  <option value="{{ districts.d_id }}">{{ districts.d_id }} - {{ districts.d_name }}</option>
+                                <!-- <option value="{{ i }}">District {{ i }}</option> -->
+                                {% endfor %}
+                        </select>
+                <!-- <input type="number" class="form-control" id="district_id" name="district_id" 
+                       value="{{ filters.district_id or '' }}" min="1" max="10" placeholder="1-10"> -->
             </div>
             <div class="col-md-2">
                 <label for="customer_id" class="form-label">Customer ID</label>
@@ -77,6 +83,7 @@
         <div class="card text-center">
             <div class="card-body">
                 <h5 class="card-title text-success">
+                    <!-- {{ payments|sum(attribute='h_amount') }} -->
                     ${{ "%.2f"|format(payments|sum(attribute='h_amount')) }}
                 </h5>
                 <p class="card-text">Total Amount</p>
@@ -297,7 +304,7 @@
                         <label for="payment_warehouse_id" class="form-label">Warehouse *</label>
                         <select class="form-select" id="payment_warehouse_id" required>
                             <option value="">Select Warehouse</option>
-                            {% for warehouse in warehouses %}
+                            {% for warehouse in warehouses.warehouses %}
                             <option value="{{ warehouse.w_id }}">{{ warehouse.w_id }} - {{ warehouse.w_name }}</option>
                             {% endfor %}
                         </select>
@@ -305,10 +312,10 @@
                     <div class="mb-3">
                         <label for="payment_district_id" class="form-label">District *</label>
                         <select class="form-select" id="payment_district_id" required>
-                            <option value="">Select District</option>
-                            {% for i in range(1, 11) %}
-                            <option value="{{ i }}">District {{ i }}</option>
-                            {% endfor %}
+                                {% for districts in districts.districts %}
+                                  <option value="{{ districts.d_id }}">{{ districts.d_id }} - {{ districts.d_name }}</option>
+                                <!-- <option value="{{ i }}">District {{ i }}</option> -->
+                                {% endfor %}
                         </select>
                     </div>
                     <div class="mb-3">
@@ -366,7 +373,7 @@
                         <label for="delivery_warehouse_id" class="form-label">Warehouse *</label>
                         <select class="form-select" id="delivery_warehouse_id" required>
                             <option value="">Select Warehouse</option>
-                            {% for warehouse in warehouses %}
+                            {% for warehouse in warehouses.warehouses %}
                             <option value="{{ warehouse.w_id }}">{{ warehouse.w_id }} - {{ warehouse.w_name }}</option>
                             {% endfor %}
                         </select>

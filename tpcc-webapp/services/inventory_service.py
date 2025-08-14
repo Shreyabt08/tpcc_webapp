@@ -4,6 +4,7 @@ Inventory service for TPC-C operations
 
 import logging
 from typing import Any, Dict, List, Optional
+import psycopg2
 
 from database.base_connector import BaseDatabaseConnector
 
@@ -15,17 +16,35 @@ class InventoryService:
 
     def __init__(self, db_connector: BaseDatabaseConnector):
         self.db = db_connector
+        self.connection = db_connector.connection
 
-    def get_stock_level(
-        self, warehouse_id: int, district_id: int, threshold: int
-    ) -> Dict[str, Any]:
-        """Execute TPC-C Stock Level transaction"""
+    def get_stock_level(self, warehouse_id: int, district_id: int, threshold: int):
+        """
+        Fetch stock level for a given warehouse/district with threshold.
+        Returns a list of items below threshold quantity.
+        """
         try:
-            return self.db.get_stock_level(warehouse_id, district_id, threshold)
+            with self.connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+                query = """
+                    SELECT s_i_id, s_quantity
+                    FROM stock
+                    WHERE s_w_id = %s
+                      AND s_quantity < %s
+                      AND s_i_id IN (
+                          SELECT ol_i_id
+                          FROM order_line
+                          WHERE ol_w_id = %s
+                            AND ol_d_id = %s
+                      )
+                """
+                cursor.execute(query, (warehouse_id, threshold, warehouse_id, district_id))
+                results = cursor.fetchall()
+                print(f"Stock level : {results}")
+                return {"success": True, "data": results}
         except Exception as e:
-            logger.error(f"Stock level service error: {str(e)}")
+            logger.error(f"Database error in get_stock_level: {str(e)}")
             return {"success": False, "error": str(e)}
-
+        
     def get_inventory(
         self,
         warehouse_id: Optional[int] = None,

@@ -160,8 +160,8 @@ class NeonConnector(BaseDatabaseConnector):
     def fetch_one(self, query, params=None):
         with self.connection.cursor(cursor_factory=RealDictCursor) as cursor:
             cursor.execute(query, params or {})
-            return cursor.fetchone()  # Returns a dict or None
-
+            return cursor.fetchone()  
+        
     def fetch_all(self, query, params=None):
         with self.connection.cursor(cursor_factory=RealDictCursor) as cursor:
             cursor.execute(query, params or {})

@@ -272,7 +272,7 @@
                             <label for="new_warehouse_id" class="form-label">Warehouse *</label>
                             <select class="form-select" id="new_warehouse_id" required>
                                 <option value="">Select Warehouse</option>
-                                {% for warehouse in warehouses %}
+                                {% for warehouse in warehouses.warehouses %}
                                 <option value="{{ warehouse.w_id }}">{{ warehouse.w_id }} - {{ warehouse.w_name }}</option>
                                 {% endfor %}
                             </select>
@@ -281,8 +281,9 @@
                             <label for="new_district_id" class="form-label">District *</label>
                             <select class="form-select" id="new_district_id" required>
                                 <option value="">Select District</option>
-                                {% for i in range(1, 11) %}
-                                <option value="{{ i }}">District {{ i }}</option>
+                                 {% for districts in districts.districts %}
+                                  <option value="{{ districts.d_id }}">{{ districts.d_id }} - {{ districts.d_name }}</option>
+                                <!-- <option value="{{ i }}">District {{ i }}</option> -->
                                 {% endfor %}
                             </select>
                         </div>
