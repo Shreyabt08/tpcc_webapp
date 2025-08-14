@@ -170,6 +170,7 @@ class NeonConnector(BaseDatabaseConnector):
     def get_provider_name(self) -> str:
         return self.provider_name
 
+    
     def close_connection(self):
         try:
             if self.connection:

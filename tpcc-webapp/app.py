@@ -76,15 +76,6 @@ def initialize_services():
 with app.app_context():
     initialize_services()
 
-# @app.route('/api/warehouses', methods=['GET'])
-# def warehouses_api():
-#     try:
-#         warehouses_data = analytics_service.get_warehouses()  
-#         print(warehouses_data)
-#         return {"success": True, "warehouses": warehouses_data}
-#     except Exception as e:
-#         return {"success": False, "error": str(e)}
-
 
 @app.route("/")
 def dashboard():
@@ -326,115 +317,6 @@ def inventory():
             filters=default_filters,
         )
 
-# @app.route("/inventory")
-# def inventory():
-#     """Inventory management page"""
-#     try:
-#         logger.info("📦 Inventory page accessed")
-
-#         # Get filter parameters from query
-#         warehouse_id = request.args.get("warehouse_id", type=int)
-#         low_stock_threshold = request.args.get("threshold", 10, type=int)
-#         item_search = request.args.get("item_search")
-#         limit = request.args.get("limit", 100, type=int)
-#         page = request.args.get("page", 1, type=int)
-
-#         # Calculate offset
-#         offset = (page - 1) * limit
-
-#         logger.info(
-#             f"Filters: warehouse_id={warehouse_id}, threshold={low_stock_threshold}, "
-#             f"search='{item_search or ''}', limit={limit}, page={page}"
-#         )
-
-#         # Fetch inventory data with pagination
-#         inventory_result = inventory_service.get_inventory_paginated(
-#             warehouse_id=warehouse_id,
-#             low_stock_threshold=low_stock_threshold,
-#             item_search=item_search,
-#             limit=limit,
-#             offset=offset,
-#         )
-#         inventory_list = inventory_result.get("inventory", [])
-#         total_count = inventory_result.get("total_count", 0)
-#         print(f"App.py : {inventory_list}")
-
-#         logger.info(
-#             f"Retrieved {len(inventory_list)} inventory items out of {total_count} total"
-#         )
-
-#           # Get warehouses for filter dropdown
-#         logger.info("   Fetching warehouses for dropdown...")
-#         warehouses = analytics_service.get_warehouses()
-#         logger.info(f"   ✅ Retrieved {len(warehouses)} warehouses")
-#          # Get districts for filter dropdown
-#         logger.info("   Fetching districts for dropdown...")
-#         districts = analytics_service.get_districts()
-#         logger.info(f"✅ Retrieved {len(districts)} districts")
-#         # # Fetch warehouses for filter dropdown
-#         # warehouses = analytics_service.get_warehouses()
-#         # logger.info(f"Retrieved {len(warehouses)} warehouses")
-
-#         # Calculate pagination info
-#         total_pages = (total_count + limit - 1) // limit if total_count > 0 else 1
-#         pagination = {
-#             "page": page,
-#             "limit": limit,
-#             "total_count": total_count,
-#             "total_pages": total_pages,
-#             "has_prev": inventory_result.get("has_prev", False),
-#             "has_next": inventory_result.get("has_next", False),
-#             "prev_page": page - 1 if page > 1 else None,
-#             "next_page": page + 1 if page < total_pages else None,
-#             "start_item": offset + 1 if total_count > 0 else 0,
-#             "end_item": min(offset + limit, total_count),
-#         }
-
-#         # Build filters dict
-#         filters = {
-#             "warehouse_id": warehouse_id,
-#             "threshold": low_stock_threshold,
-#             "item_search": item_search,
-#             "limit": limit,
-#         }
-#         total_value = sum(item['i_price'] for item in inventory_list)
-#         return render_template(
-#             "inventory.html",
-#             inventory=inventory_list,
-#             total_value = total_value,
-#             warehouses=warehouses,
-#             districts = districts,
-#             pagination=pagination,
-#             filters=filters,
-#         )
-
-#     except Exception as e:
-#         logger.error(f"Inventory page error: {str(e)}")
-#         flash(f"Error loading inventory: {str(e)}", "error")
-
-#         # Provide default values to avoid template errors
-#         default_filters = {"warehouse_id": None, "threshold": 10, "item_search": "", "limit": 100}
-#         default_pagination = {
-#             "page": 1,
-#             "limit": 100,
-#             "total_count": 0,
-#             "total_pages": 1,
-#             "has_prev": False,
-#             "has_next": False,
-#             "prev_page": None,
-#             "next_page": None,
-#             "start_item": 0,
-#             "end_item": 0,
-#         }
-
-#         return render_template(
-#             "inventory.html",
-#             inventory=[],
-#             warehouses=[],
-#             districts = [],
-#             pagination=default_pagination,
-#             filters=default_filters,
-#         )
 
 @app.route("/payments")
 def payments():

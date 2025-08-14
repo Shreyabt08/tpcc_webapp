@@ -5,7 +5,6 @@ Inventory service for TPC-C operations
 import logging
 from typing import Any, Dict, List, Optional
 import psycopg2
-
 from database.base_connector import BaseDatabaseConnector
 
 logger = logging.getLogger(__name__)
