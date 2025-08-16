@@ -7,6 +7,7 @@ import os
 from typing import Any, Dict, List, Optional
 
 from database.base_connector import BaseDatabaseConnector
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,85 @@ class OrderService:
         # Get region name from environment variable or use default
         self.region_name = region_name or os.environ.get("REGION_NAME", "us-east-1")
 
+    def execute_delivery(self, warehouse_id: int, carrier_id: int):
+        """
+        Executes the TPC-C delivery transaction for a warehouse.
+        - warehouse_id: Warehouse ID
+        - carrier_id: Carrier ID (1–10)
+        """
+
+        print(f"🚚 Starting delivery process for Warehouse {warehouse_id} with Carrier {carrier_id}")
+
+        for district_id in range(1, 11):
+            print(f"\n📦 Processing District {district_id}")
+
+            # 1. Get the oldest undelivered order
+            orders = self.db.execute_query("""
+                SELECT o_id, o_c_id
+                FROM orders
+                WHERE o_w_id = %s
+                AND o_d_id = %s
+                AND o_carrier_id IS NULL
+                ORDER BY o_id ASC
+                LIMIT 1
+            """, (warehouse_id, district_id))
+
+            if not orders:
+                print("   ➡ No undelivered orders found for this district.")
+                continue
+
+            order_id = orders[0]['o_id']
+            customer_id = orders[0]['o_c_id']
+            print(f"   📝 Found Order ID {order_id} for Customer {customer_id}")
+
+            # 2. Update order's carrier ID
+            self.db.execute_query("""
+                UPDATE orders
+                SET o_carrier_id = %s
+                WHERE o_w_id = %s
+                AND o_d_id = %s
+                AND o_id = %s
+            """, (carrier_id, warehouse_id, district_id, order_id))
+            print(f"   ✅ Updated carrier for Order {order_id}")
+
+            # 3. Update order lines' delivery date
+            self.db.execute_query("""
+                UPDATE order_line
+                SET ol_delivery_d = CURRENT_TIMESTAMP
+                WHERE ol_w_id = %s
+                AND ol_d_id = %s
+                AND ol_o_id = %s
+            """, (warehouse_id, district_id, order_id))
+            print(f"   📅 Set delivery date for Order {order_id}")
+
+            # 4. Calculate total amount from order lines
+            total_amount_result = self.db.execute_query("""
+                SELECT SUM(ol_amount) AS total_amount
+                FROM order_line
+                WHERE ol_w_id = %s
+                AND ol_d_id = %s
+                AND ol_o_id = %s
+            """, (warehouse_id, district_id, order_id))
+
+            total_amount = total_amount_result[0]['total_amount'] if total_amount_result else 0
+            print(f"   💰 Total amount for Order {order_id}: {total_amount}")
+
+            # 5. Update customer balance and delivery count
+            self.db.execute_query("""
+                UPDATE customer
+                SET c_balance = c_balance + %s,
+                    c_delivery_cnt = c_delivery_cnt + 1
+                WHERE c_w_id = %s
+                AND c_d_id = %s
+                AND c_id = %s
+            """, (total_amount, warehouse_id, district_id, customer_id))
+            print(f"   👤 Updated Customer {customer_id} balance and delivery count")
+
+        # Commit changes after all updates
+        self.db.connection.commit()
+        print("\n✅ Delivery process completed successfully.")
+
+
     def execute_new_order(
         self,
         warehouse_id: int,
@@ -29,69 +109,232 @@ class OrderService:
         customer_id: int,
         items: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
-        """Execute TPC-C New Order transaction"""
+        """
+        Execute TPC-C New Order transaction:
+        1. Insert into orders
+        2. Insert order_lines for each item
+        3. Mark order as multi-region if items come from different warehouses
+        """
         try:
-            # Execute the new order transaction
-            result = self.db.execute_new_order(
-                warehouse_id, district_id, customer_id, items
+            print("🛒 [START] Creating new order")
+            logger.info(
+                f"🛒 Creating new order: warehouse_id={warehouse_id}, district_id={district_id}, "
+                f"customer_id={customer_id}, items={len(items)}"
             )
+            print(f"➡️ Params - W_ID: {warehouse_id}, D_ID: {district_id}, C_ID: {customer_id}, Items: {len(items)}")
 
-            if result["success"]:
-                # Add region information to the result
-                result["region_created"] = self.region_name
+            # 🔍 Validate item fields
+            for idx, item in enumerate(items, 1):
+                print(f"🔍 Validating item {idx}: {item}")
+                if "i_id" not in item or "quantity" not in item:
+                    raise ValueError(f"Item {idx} is missing required fields: {item}")
+                logger.info(f"📦 Item {idx}: {item}")
 
-                # Update the order with region information
-                try:
-                    # For Spanner, we need to use a different approach since it handles parameters differently
-                    from database.spanner_connector import SpannerConnector
+            # Ensure warehouse_id and district_id are ints
+            warehouse_id = int(warehouse_id)
+            district_id = int(district_id)
 
-                    if isinstance(self.db, SpannerConnector):
-                        # For Spanner, we'll use the transaction-based approach within the connector
-                        # Skip the region update here since Spanner handles it differently
-                        logger.info(
-                            f"Spanner order created with region tracking: {self.region_name}"
-                        )
-                    else:
-                        # For other databases
-                        self.db.execute_query(
-                            "UPDATE orders SET region_created = %s WHERE o_id = %s AND o_d_id = %s AND o_w_id = %s",
-                            (
-                                self.region_name,
-                                result["order_id"],
-                                district_id,
-                                warehouse_id,
-                            ),
-                        )
-                        logger.info(f"Order region updated to: {self.region_name}")
-                except Exception as update_error:
-                    logger.warning(
-                        f"Failed to update region information: {str(update_error)}"
-                    )
+            # Convert item warehouse_id to int if present, else default
+            for item in items:
+                item['warehouse_id'] = int(item.get('warehouse_id', warehouse_id))
 
-            return result
+            # ✅ Count local vs remote items
+            local_items = sum(
+                1 for item in items if item.get("warehouse_id", warehouse_id) == warehouse_id
+            )
+            all_local = 1 if local_items == len(items) else 0
+            print(f"📊 Local items: {local_items}, All local: {all_local}")
+            
+            print(f"Running query to get next order ID for W_ID={warehouse_id}, D_ID={district_id}")
+            # 🆔 Generate new order ID
+            order_id_result = self.db.fetch_one(
+                """
+                SELECT COALESCE(MAX(o_id), 0) + 1 AS next_order_id
+                FROM orders
+                WHERE o_w_id = %s AND o_d_id = %s
+                """,
+                (warehouse_id, district_id),
+            )
+            print(f"order_id_result: {order_id_result}")  # Debug output
+            if not order_id_result or 'next_order_id' not in order_id_result:
+                raise RuntimeError("Failed to fetch new order id")
+
+            order_id = order_id_result['next_order_id']
+            print(f"🆔 New Order ID: {order_id}")
+
+            # 📝 Insert into orders table
+            order_entry_d = datetime.utcnow()
+            self.db.execute_query(
+                """
+                INSERT INTO orders (
+                    o_id, o_d_id, o_w_id, o_c_id,
+                    o_entry_d, o_carrier_id, o_ol_cnt, o_all_local
+                ) VALUES (%s, %s, %s, %s, %s, NULL, %s, %s)
+                """,
+                (
+                    order_id,
+                    district_id,
+                    warehouse_id,
+                    customer_id,
+                    order_entry_d,
+                    len(items),
+                    all_local,
+                ),
+            )
+            print("✅ Inserted order into 'orders' table")
+
+            # 📥 Insert order_lines
+            for line_number, item in enumerate(items, 1):
+                item_id = item["i_id"]
+                quantity = item["quantity"]
+                supply_w_id = item.get("warehouse_id", warehouse_id)
+
+                # Get item price
+                price_result = self.db.fetch_one(
+                    "SELECT i_price FROM item WHERE i_id = %s", (item_id,)
+                )
+                if not price_result or "i_price" not in price_result:
+                    raise RuntimeError(f"Item price not found for item_id {item_id}")
+                item_price = price_result["i_price"]
+
+                amount = quantity * item_price
+                ol_dist_info = "DEFAULT DIST INFO".ljust(24)[:24]  # exactly 24 chars
+
+                print(f"📦 Inserting line {line_number}: item_id={item_id}, quantity={quantity}, price={item_price}, amount={amount}")
+
+                self.db.execute_query(
+                    """
+                    INSERT INTO order_line (
+                        ol_o_id, ol_d_id, ol_w_id, ol_number,
+                        ol_i_id, ol_supply_w_id, ol_quantity, ol_amount, ol_delivery_d, ol_dist_info
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NULL, %s)
+                    """,
+                    (
+                        order_id,
+                        district_id,
+                        warehouse_id,
+                        line_number,
+                        item_id,
+                        supply_w_id,
+                        quantity,
+                        amount,
+                        ol_dist_info,
+                    ),
+                )
+
+            logger.info(f"✅ Order {order_id} created successfully")
+            print(f"✅ Order {order_id} created successfully")
+
+            return {
+                "success": True,
+                "order_id": order_id,
+                "warehouse_id": warehouse_id,
+                "district_id": district_id,
+                "customer_id": customer_id,
+                "items_count": len(items),
+                "all_local": all_local,
+            }
+
         except Exception as e:
-            logger.error(f"New order service error: {str(e)}")
-            return {"success": False, "error": str(e)}
+            import traceback
+            error_message = str(e) or "Unexpected error"
+            print(f"❌ Exception occurred: {error_message}")
+            print(traceback.format_exc())
+            logger.error(f"❌ New order service error: {error_message}\n{traceback.format_exc()}")
+            return {"success": False, "error": error_message}
+
+    # def get_orders(self, warehouse_id=None, district_id=None, customer_id=None, status=None, limit=50, offset=0):
+    #     try:
+    #         # Base query
+    #         query = """
+    #             SELECT *,
+    #                 CASE 
+    #                     WHEN o_carrier_id IS NULL THEN 'New'
+    #                     ELSE 'Delivered'
+    #                 END AS status
+    #             FROM orders
+    #             WHERE (%(warehouse_id)s IS NULL OR o_w_id = %(warehouse_id)s)
+    #             AND (%(district_id)s IS NULL OR o_d_id = %(district_id)s)
+    #             AND (%(customer_id)s IS NULL OR o_c_id = %(customer_id)s)
+    #         """
+    #         if status and status.lower() == "new":
+    #             query += " AND o_carrier_id IS NULL"
+    #         elif status and status.lower() == "delivered":
+    #             query += " AND o_carrier_id IS NOT NULL"
+
+    #         # Order & pagination
+    #         query += " ORDER BY o_entry_d DESC LIMIT %(limit)s OFFSET %(offset)s"
+
+    #         params = {
+    #             "warehouse_id": warehouse_id,
+    #             "district_id": district_id,
+    #             "customer_id": customer_id,
+    #             "status": status,
+    #             "limit": limit,
+    #             "offset": offset,
+    #         }
+
+    #         # Debug print query & params
+    #         print("📌 Orders Query:", query)
+    #         print("📌 Params:", params)
+
+    #         # Fetch orders
+    #         with self.db.cursor(dictionary=True) as cursor:
+    #             cursor.execute(query, params)
+    #             orders = cursor.fetchall()
+
+    #         # Count query
+    #         count_query = """
+    #             SELECT COUNT(*) AS total
+    #             FROM orders
+    #             WHERE (%(warehouse_id)s IS NULL OR o_w_id = %(warehouse_id)s)
+    #             AND (%(district_id)s IS NULL OR o_d_id = %(district_id)s)
+    #             AND (%(customer_id)s IS NULL OR o_c_id = %(customer_id)s)
+    #         """
+    #         if status and status.lower() == "new":
+    #             count_query += " AND o_carrier_id IS NULL"
+    #         elif status and status.lower() == "delivered":
+    #             count_query += " AND o_carrier_id IS NOT NULL"
+
+    #         # Debug print count query
+    #         print("📌 Count Query:", count_query)
+
+    #         with self.db.cursor(dictionary=True) as cursor:
+    #             cursor.execute(count_query, params)
+    #             total_count = cursor.fetchone()["total"]
+
+    #         return {
+    #             "orders": orders,
+    #             "total_count": total_count,
+    #             "has_prev": offset > 0,
+    #             "has_next": offset + limit < total_count
+    #         }
+
+    #     except Exception as e:
+    #         logger.error(f"❌ Error in get_orders: {str(e)}")
+    #         raise
+
 
     def get_orders(self, warehouse_id=None, district_id=None, customer_id=None, status=None, limit=50, offset=0):
         try:
             query = """
                 SELECT *,
-                    CASE 
-                        WHEN o_carrier_id IS NULL THEN 'Pending'
-                        ELSE 'Delivered'
-                    END AS status
-                FROM orders
-                WHERE (%(warehouse_id)s IS NULL OR o_w_id = %(warehouse_id)s)
-                AND (%(district_id)s IS NULL OR o_d_id = %(district_id)s)
-                AND (%(customer_id)s IS NULL OR o_c_id = %(customer_id)s)
-                AND (%(status)s IS NULL OR 
-                    (%(status)s = 'Pending' AND o_carrier_id IS NULL) OR
-                    (%(status)s = 'Delivered' AND o_carrier_id IS NOT NULL))
-                ORDER BY o_id DESC
-                LIMIT %(limit)s OFFSET %(offset)s
+                        CASE 
+                            WHEN o_carrier_id IS NULL THEN 'New'
+                            ELSE 'Delivered'
+                        END AS status
+                    FROM orders
+                    WHERE (%(warehouse_id)s IS NULL OR o_w_id = %(warehouse_id)s)
+                    AND (%(district_id)s IS NULL OR o_d_id = %(district_id)s)
+                    AND (%(customer_id)s IS NULL OR o_c_id = %(customer_id)s)
+                    AND (
+                            %(status)s IS NULL
+                            OR (%(status)s = 'New'   AND o_carrier_id IS NULL)
+                            OR (%(status)s = 'Delivered' AND o_carrier_id IS NOT NULL)
+                        )
+                    ORDER BY o_entry_d DESC
+                    LIMIT %(limit)s OFFSET %(offset)s
             """
-
             params = {
                 "warehouse_id": warehouse_id,
                 "district_id": district_id,
@@ -112,7 +355,7 @@ class OrderService:
                 AND (%(district_id)s IS NULL OR o_d_id = %(district_id)s)
                 AND (%(customer_id)s IS NULL OR o_c_id = %(customer_id)s)
                 AND (%(status)s IS NULL OR 
-                    (%(status)s = 'Pending' AND o_carrier_id IS NULL) OR
+                    (%(status)s = 'New' AND o_carrier_id IS NULL) OR
                     (%(status)s = 'Delivered' AND o_carrier_id IS NOT NULL))
             """
             with self.db.cursor(dictionary=True) as cursor:
@@ -300,3 +543,5 @@ class OrderService:
         except Exception as e:
             logger.error(f"Get order statistics service error: {str(e)}")
             return {}
+
+   

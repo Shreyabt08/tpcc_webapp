@@ -120,7 +120,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Test Result</h5>
-                <button type="button" class="close" data-dismiss="modal">
+                <button type="button" class="close" data-bs-dismiss="modal">
                     <span>&times;</span>
                 </button>
             </div>
@@ -128,7 +128,7 @@
                 <div id="testResultContent"></div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
     </div>
@@ -162,60 +162,68 @@ document.addEventListener('DOMContentLoaded', function() {
         loadRecentOrders();
     });
 
+    
     function createTestOrder() {
-        const btn = document.getElementById('createOrderBtn');
-        const originalText = btn.innerHTML;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
-        btn.disabled = true;
+    const btn = document.getElementById('createOrderBtn');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+    btn.disabled = true;
 
-        // Parse items JSON
-        let items;
-        try {
-            items = JSON.parse(document.getElementById('itemsJson').value);
-        } catch (e) {
-            showAlert('error', 'Invalid JSON format for items');
-            btn.innerHTML = originalText;
-            btn.disabled = false;
-            return;
-        }
-
-        const data = {
-            warehouse_id: parseInt(document.getElementById('warehouseId').value),
-            district_id: parseInt(document.getElementById('districtId').value),
-            customer_id: parseInt(document.getElementById('customerId').value),
-            items: items
-        };
-
-        fetch('/api/test/multi-region/create-order', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(data)
-        })
-        .then(response => response.json())
-        .then(response => {
-            btn.innerHTML = originalText;
-            btn.disabled = false;
-            
-            if (response.success) {
-                showTestResult('Order Created Successfully', response, 'success');
-                // Refresh data after successful order creation
-                setTimeout(function() {
-                    loadRegionStats();
-                    loadRecentOrders();
-                }, 1000);
-            } else {
-                showTestResult('Order Creation Failed', response, 'error');
-            }
-        })
-        .catch(error => {
-            btn.innerHTML = originalText;
-            btn.disabled = false;
-            const response = { error: error.message || 'Unknown error occurred' };
-            showTestResult('Order Creation Error', response, 'error');
-        });
+    // Parse items JSON
+    let items;
+    try {
+        items = JSON.parse(document.getElementById('itemsJson').value);
+        // ✅ Normalize keys: ensure backend gets "item_id"
+        items = items.map(it => ({
+            i_id: it.item_id || it.i_id,   // fallback if frontend used i_id
+            quantity: it.quantity,
+            warehouse_id: it.warehouse_id
+        }));
+    } catch (e) {
+        showAlert('error', 'Invalid JSON format for items');
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        return;
     }
+
+    const data = {
+        warehouse_id: parseInt(document.getElementById('warehouseId').value),
+        district_id: parseInt(document.getElementById('districtId').value),
+        customer_id: parseInt(document.getElementById('customerId').value),
+        items: items
+    };
+
+    fetch('/api/test/multi-region/create-order', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(response => {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        
+        if (response.success) {
+            showTestResult('Order Created Successfully', response, 'success');
+            // Refresh data after successful order creation
+            setTimeout(function() {
+                loadRegionStats();
+                loadRecentOrders();
+            }, 1000);
+        } else {
+            showTestResult('Order Creation Failed', response, 'error');
+        }
+    })
+    .catch(error => {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        const response = { error: error.message || 'Unknown error occurred' };
+        showTestResult('Order Creation Error', response, 'error');
+    });
+}
+
 
     function loadRegionStats() {
         document.getElementById('regionStatsContainer').innerHTML = `

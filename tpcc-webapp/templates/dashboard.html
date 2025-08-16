@@ -22,8 +22,9 @@
                         <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
                             Total Warehouses
                         </div>
-                    <div class="h5 mb-0 font-weight-bold text-gray-800" id="totalWarehouses">
-                            0
+                    <div class="h5 mb-0 font-weight-bold text-gray-800">
+                        {{ "{:,}".format(metrics.total_warehouses or 0) }}
+                             <!-- {{ "{:,}".format(metrics.total_warehouses or 0) }} -->
                         </div>
 
                     </div>
@@ -43,8 +44,8 @@
                         <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
                             Total Orders
                         </div>
-                        <div class="h5 mb-0 font-weight-bold text-gray-800" id ="totalOrders" >
-                           0
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">
+                            {{ "{:,}".format(metrics.total_orders or 0) }}
                         </div>
                     </div>
                     <div class="col-auto">
@@ -63,8 +64,8 @@
                         <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
                             Total Customers
                         </div>
-                        <div class="h5 mb-0 font-weight-bold text-gray-800" id ="totalCustomers">
-                           0
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">
+                            {{ "{:,}".format(metrics.total_customers or 0) }}
                         </div>
                     </div>
                     <div class="col-auto">
@@ -83,9 +84,8 @@
                         <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
                             New Orders
                         </div>
-                        <div class="h5 mb-0 font-weight-bold text-gray-800" id = "totalItems">
-                            <!-- {{ "{:,}".format(metrics.new_orders or 0) }} -->
-                              0
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">
+                            {{ "{:,}".format(metrics.total_items or 0) }}
                         </div>
                     </div>
                     <div class="col-auto">
@@ -108,17 +108,16 @@
                 <div class="row">
                     <div class="col-6">
                         <div class="text-center">
-                            <div class="h4 mb-0 text-gray-800" id ="totalItems">
-                                <!-- {{ "{:,}".format(metrics.total_items or 0) }} --> 
-                                  0
+                            <div class="h4 mb-0 text-gray-800">
+                                {{ "{:,}".format(metrics.stock_items or 0) }} 
                             </div>
                             <div class="text-xs text-gray-600">Total Items</div>
                         </div>
                     </div>
                     <div class="col-6">
                         <div class="text-center">
-                            <div class="h4 mb-0 text-danger" id ="totalItems">0
-                                <!-- {{ "{:,}".format(metrics.low_stock_items or 0) }} -->
+                            <div class="h4 mb-0 text-danger">
+                                {{ "{:,}".format(metrics.low_stock_items or 0) }}
                             </div>
                             <div class="text-xs text-gray-600">Low Stock</div>
                         </div>
@@ -135,7 +134,9 @@
             </div>
             <div class="card-body">
                 <div class="text-center">
-                    <div class="h4 mb-0 text-gray-800">{{ "{:,}".format(metrics.orders_last_24h or 0) }}</div>
+                    <div class="h4 mb-0 text-gray-800">
+                        {{ "{:,}".format(metrics.orders_last_24h or 0) }}
+                    </div>
                     <div class="text-xs text-gray-600">Orders Last 24h</div>
                 </div>
                 {% if metrics.avg_order_value %}
@@ -205,7 +206,6 @@
         </div>
     </div>
 </div>
-
 <!-- New Order Modal -->
 <div class="modal fade" id="newOrderModal" tabindex="-1">
     <div class="modal-dialog">
@@ -214,46 +214,57 @@
                 <h5 class="modal-title">Create New Order</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
+
             <div class="modal-body">
                 <form id="newOrderForm">
+                    <!-- Warehouse ID -->
                     <div class="mb-3">
                         <label for="warehouseId" class="form-label">Warehouse ID</label>
                         <input type="number" class="form-control" id="warehouseId" min="1" max="100" value="1" required>
                     </div>
+
+                    <!-- District ID -->
                     <div class="mb-3">
                         <label for="districtId" class="form-label">District ID</label>
                         <input type="number" class="form-control" id="districtId" min="1" max="10" value="1" required>
                     </div>
+
+                    <!-- Customer ID -->
                     <div class="mb-3">
                         <label for="customerId" class="form-label">Customer ID</label>
                         <input type="number" class="form-control" id="customerId" min="1" max="3000" value="1" required>
                     </div>
+
+                    <!-- Items List -->
                     <div class="mb-3">
                         <label class="form-label">Items</label>
                         <div id="orderItems">
-                            <div class="row mb-2">
+                            <div class="row mb-2 order-item">
                                 <div class="col-6">
-                                    <input type="number" class="form-control" placeholder="Item ID" min="1" max="100000" value="1" required>
+                                    <input type="number" class="form-control item-id" placeholder="Item ID" min="1" max="100000" value="1" required>
                                 </div>
                                 <div class="col-4">
-                                    <input type="number" class="form-control" placeholder="Quantity" min="1" max="10" value="1" required>
+                                    <input type="number" class="form-control item-quantity" placeholder="Quantity" min="1" max="10" value="1" required>
                                 </div>
                                 <div class="col-2">
                                     <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeItem(this)">×</button>
                                 </div>
                             </div>
                         </div>
-                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="addItem()">Add Item</button>
+
+                        <button type="button" class="btn btn-outline-primary btn-sm mt-2" onclick="addItem()">Add Item</button>
                     </div>
                 </form>
             </div>
+
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="submitNewOrder()">Create Order</button>
+                <button type="button" id="createOrderButton" class="btn btn-primary" onclick="submitNewOrder(event)">Create Order</button>
             </div>
         </div>
     </div>
 </div>
+
 
 <!-- Payment Modal -->
 <div class="modal fade" id="paymentModal" tabindex="-1">
@@ -295,29 +306,84 @@
 
 {% block scripts %}
 <script>
-document.addEventListener("DOMContentLoaded", function () {
-    fetch("/api/dashboard-metrics")
-        .then(response => response.json())
-        .then(data => {
-            const metrics = data.metrics.metrics; 
 
-            console.log({
-                metrics: metrics,
-                provider: data.metrics.provider,
-                success: data.metrics.success
-            });
+async function submitPayment(event) {
+    const button = document.querySelector('#paymentModal .btn-success');
+    button.disabled = true;
+    button.textContent = 'Processing...';
 
-            // Bind to HTML
-            document.getElementById("totalWarehouses").textContent = metrics.total_warehouses || 0;
-            document.getElementById("totalOrders").textContent = metrics.total_orders || 0;
-            document.getElementById("totalCustomers").textContent = metrics.total_customers || 0;
-            document.getElementById("totalItems").textContent = metrics.total_items || 0;
-        })
-        .catch(error => console.error("Error loading dashboard metrics:", error));
-});
+    const warehouseId = parseInt(document.getElementById('paymentWarehouseId').value);
+    const districtId = parseInt(document.getElementById('paymentDistrictId').value);
+    const customerId = parseInt(document.getElementById('paymentCustomerId').value);
+    const amount = parseFloat(document.getElementById('paymentAmount').value);
 
-// Run immediately after page loads
-document.addEventListener("DOMContentLoaded", loadDashboardMetrics);
+    const payload = {
+        warehouse_id: warehouseId,
+        district_id: districtId,
+        customer_id: customerId,
+        amount: amount
+    };
+
+    try {
+        const response = await fetch("/api/payment", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const contentType = response.headers.get("content-type");
+
+        let data = {};
+        if (contentType && contentType.includes("application/json")) {
+            data = await response.json();
+        } else {
+            const text = await response.text();
+            console.warn("Non-JSON response received:", text);
+        }
+
+        if (response.ok && data.isSuccess) {
+            alert(`✅ Payment successful!\nTransaction ID: ${data.transaction_id}`);
+            bootstrap.Modal.getInstance(document.getElementById('paymentModal')).hide();
+        } else {
+            alert(`❌ Error processing payment: ${data.error || 'Unknown error'}`);
+        }
+    } catch (error) {
+        console.error("❌ Fetch error:", error);
+        alert("❌ Network or server error. See console for details.");
+    } finally {
+        button.disabled = false;
+        button.textContent = 'Process Payment';
+    }
+}
+
+// document.addEventListener("DOMContentLoaded", function () {
+//     fetch("/api/dashboard-metrics")
+//         .then(response => response.json())
+//         .then(data => {
+//             const metrics = data.metrics.metrics; 
+
+//             console.log({
+//                 metrics: metrics,
+//                 provider: data.metrics.provider,
+//                 success: data.metrics.success
+//             });
+
+//             // Bind to HTML
+//             document.getElementById("totalWarehouses").textContent = metrics.total_warehouses || 0;
+//             document.getElementById("totalOrders").textContent = metrics.total_orders || 0;
+//             document.getElementById("totalCustomers").textContent = metrics.total_customers || 0;
+//             document.getElementById("totalItems").textContent = metrics.total_items || 0;
+//             document.getElementById("ordersLast24h").textContent = metrics.orders_last_24h || 0;
+//             document.getElementById("low-stock").textContent = metrics.low_stock_items || 0;
+//             document.getElementById("stock_items").textContent = metrics.stock_items || 0;
+//         })
+//         .catch(error => console.error("Error loading dashboard metrics:", error));
+// });
+
+// // Run immediately after page loads
+// document.addEventListener("DOMContentLoaded", loadDashboardMetrics);
 
 
     function refreshDashboard() {
@@ -354,69 +420,153 @@ document.addEventListener("DOMContentLoaded", loadDashboardMetrics);
         button.closest('.row').remove();
     }
 
-    function submitNewOrder() {
-        const warehouseId = document.getElementById('warehouseId').value;
-        const districtId = document.getElementById('districtId').value;
-        const customerId = document.getElementById('customerId').value;
-        
-        const itemRows = document.querySelectorAll('#orderItems .row');
-        const items = [];
-        
-        itemRows.forEach(row => {
-            const inputs = row.querySelectorAll('input');
-            if (inputs.length >= 2) {
-                items.push({
-                    item_id: parseInt(inputs[0].value),
-                    quantity: parseInt(inputs[1].value)
-                });
-            }
+    function addItem() {
+    const container = document.getElementById('orderItems');
+
+    const row = document.createElement('div');
+    row.className = 'row mb-2 order-item';
+    row.innerHTML = `
+        <div class="col-6">
+            <input type="number" class="form-control item-id" placeholder="Item ID" min="1" max="100000" required>
+        </div>
+        <div class="col-4">
+            <input type="number" class="form-control item-quantity" placeholder="Quantity" min="1" max="10" required>
+        </div>
+        <div class="col-2">
+            <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeItem(this)">×</button>
+        </div>
+    `;
+
+    container.appendChild(row);
+}
+
+function removeItem(button) {
+    button.closest('.order-item').remove();
+}
+
+function submitNewOrder(event) {
+    const warehouseId = parseInt(document.getElementById('warehouseId').value);
+    const districtId = parseInt(document.getElementById('districtId').value);
+    const customerId = parseInt(document.getElementById('customerId').value);
+
+    if (!warehouseId || !districtId || !customerId) {
+        alert('Please fill in all required fields');
+        return;
+    }
+
+    const itemRows = document.querySelectorAll('#orderItems .order-item');
+    const items = [];
+
+    for (let row of itemRows) {
+        const itemIdInput = row.querySelector('.item-id');
+        const quantityInput = row.querySelector('.item-quantity');
+
+        const i_id = parseInt(itemIdInput.value);
+        const quantity = parseInt(quantityInput.value);
+
+        if (!i_id || !quantity || isNaN(i_id) || isNaN(quantity)) {
+            alert('Please fill in all item details');
+            return;
+        }
+
+       items.push({
+            i_id: i_id,      
+            i_quantity: quantity,
+            warehouse_id: warehouseId
         });
-
-        const orderData = {
-            warehouse_id: parseInt(warehouseId),
-            district_id: parseInt(districtId),
-            customer_id: parseInt(customerId),
-            items: items
-        };
-
-        makeRequest('/api/new-order', 'POST', orderData)
-            .then(response => {
-                if (response.success) {
-                    alert(`Order created successfully! Order ID: ${response.order_id}, Total: $${response.total_amount}`);
-                    bootstrap.Modal.getInstance(document.getElementById('newOrderModal')).hide();
-                    refreshDashboard();
-                } else {
-                    alert(`Error creating order: ${response.error}`);
-                }
-            });
+    
     }
 
-    function submitPayment() {
-        const warehouseId = document.getElementById('paymentWarehouseId').value;
-        const districtId = document.getElementById('paymentDistrictId').value;
-        const customerId = document.getElementById('paymentCustomerId').value;
-        const amount = document.getElementById('paymentAmount').value;
+    const orderData = {
+        warehouse_id: warehouseId,
+        district_id: districtId,
+        customer_id: customerId,
+        items: items
+    };
 
-        const paymentData = {
-            warehouse_id: parseInt(warehouseId),
-            district_id: parseInt(districtId),
-            customer_id: parseInt(customerId),
-            amount: parseFloat(amount)
-        };
+    const submitBtn = event?.target || document.getElementById('createOrderButton');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Creating...';
+    submitBtn.disabled = true;
 
-        makeRequest('/api/payment', 'POST', paymentData)
-            .then(response => {
-                if (response.success) {
-                    alert(`Payment processed successfully! New balance: $${response.new_balance}`);
-                    bootstrap.Modal.getInstance(document.getElementById('paymentModal')).hide();
-                    refreshDashboard();
-                } else {
-                    alert(`Error processing payment: ${response.error}`);
-                }
-            });
+    makeRequest('/api/new-order', 'POST', orderData)
+        .then(response => {
+            if (response.success) {
+                alert(`✅ Order created successfully! Order ID: ${response.order_id}`);
+                bootstrap.Modal.getInstance(document.getElementById('newOrderModal')).hide();
+                refreshDashboard?.(); // If available
+            } else {
+                alert(`❌ Error creating order: ${response.error}`);
+            }
+        })
+        .catch(error => {
+            alert(`❌ Request failed: ${error.message}`);
+        })
+        .finally(() => {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        });
+}
+
+
+function submitNewOrder() {
+    const warehouseId = document.getElementById('warehouseId').value;
+    const districtId = document.getElementById('districtId').value;
+    const customerId = document.getElementById('customerId').value;
+
+    if (!warehouseId || !districtId || !customerId) {
+        alert('Please fill in all required fields');
+        return;
     }
-
-    function runStockLevelCheck() {
+    
+    const items = [];
+    const orderItems = document.querySelectorAll('#orderItems .row');
+    
+    for (let item of orderItems) {
+        const itemId = parseInt(item.querySelector('.item-id').value);
+        const quantity = parseInt(item.querySelector('.item-quantity').value);
+        
+        if (!itemId || !quantity) {
+            alert('Please fill in all item details');
+            return;
+        }
+        
+        items.push({
+            i_id: itemId,      
+            quantity: quantity,
+            warehouse_id: warehouseId,
+        });
+    }
+    
+    const orderData = {
+        warehouse_id: warehouseId,
+        district_id: districtId,
+        customer_id: customerId,
+        items: items
+    };
+    
+    // Show loading
+    const submitBtn = event.target;
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Creating...';
+    submitBtn.disabled = true;
+    
+    makeRequest('/api/new-order', 'POST', orderData)
+        .then(response => {
+            if (response.success) {
+                alert('Order created successfully! Order ID: ' + response.order_id);
+                location.reload();
+            } else {
+                alert('Error creating order: ' + (response.error || 'Unknown error'));
+            }
+        })
+        .finally(() => {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        });
+}
+ 
+function runStockLevelCheck() {
         const warehouseId = prompt('Enter Warehouse ID (1-100):', '1');
         const districtId = prompt('Enter District ID (1-10):', '1');
         

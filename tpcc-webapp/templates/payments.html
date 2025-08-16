@@ -35,12 +35,15 @@
             </div>
             <div class="col-md-2">
                 <label for="district_id" class="form-label">District</label>
-                <select class="form-select" id="stock_district_id" required>
-                                {% for districts in districts.districts %}
-                                  <option value="{{ districts.d_id }}">{{ districts.d_id }} - {{ districts.d_name }}</option>
-                                <!-- <option value="{{ i }}">District {{ i }}</option> -->
-                                {% endfor %}
-                        </select>
+                <select class="form-select" id="district_id" name="district_id">
+                        {% for district in districts.districts %}
+                            <option value="{{ district.d_id }}"
+                                {% if filters.district_id and filters.district_id == district.d_id %}selected{% endif %}>
+                                {{ district.d_id }} - {{ district.d_name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+
                 <!-- <input type="number" class="form-control" id="district_id" name="district_id" 
                        value="{{ filters.district_id or '' }}" min="1" max="10" placeholder="1-10"> -->
             </div>
@@ -442,7 +445,7 @@ function submitPayment() {
     
     makeRequest('/api/payment', 'POST', paymentData)
         .then(response => {
-            if (response.success) {
+            if (response.isSuccess)  {
                 resultDiv.innerHTML = `
                     <div class="alert alert-success">
                         <h6><i class="bi bi-check-circle"></i> Payment Processed Successfully</h6>
@@ -467,77 +470,143 @@ function submitPayment() {
         });
 }
 
+// function viewCustomerPayments(warehouseId, districtId, customerId) {
+//     const modal = new bootstrap.Modal(document.getElementById('customerPaymentsModal'));
+//     const content = document.getElementById('customerPaymentsContent');
+    
+//     showLoading(content);
+//     modal.show();
+    
+//     // Filter current payments for this customer
+//     const customerPayments = Array.from(document.querySelectorAll('tbody tr')).filter(row => {
+//         const rowWarehouse = parseInt(row.cells[2].textContent);
+//         const rowDistrict = parseInt(row.cells[3].textContent);
+//         const rowCustomerId = parseInt(row.cells[1].querySelector('small').textContent.replace('ID: ', ''));
+        
+//         return rowWarehouse === warehouseId && rowDistrict === districtId && rowCustomerId === customerId;
+//     });
+    
+//     if (customerPayments.length > 0) {
+//         const firstPayment = customerPayments[0];
+//         const customerName = firstPayment.cells[1].querySelector('div').textContent;
+        
+//         let totalAmount = 0;
+//         const paymentRows = customerPayments.map(row => {
+//             const amount = parseFloat(row.cells[4].textContent.replace(/[$,]/g, ''));
+//             totalAmount += amount;
+            
+//             return `
+//                 <tr>
+//                     <td>${row.cells[0].innerHTML}</td>
+//                     <td>${row.cells[4].innerHTML}</td>
+//                     <td>${row.cells[5].textContent}</td>
+//                 </tr>
+//             `;
+//         }).join('');
+        
+//         content.innerHTML = `
+//             <div class="row mb-3">
+//                 <div class="col-md-6">
+//                     <h6>Customer Information</h6>
+//                     <p><strong>Name:</strong> ${customerName}</p>
+//                     <p><strong>Customer ID:</strong> ${customerId}</p>
+//                     <p><strong>Warehouse:</strong> ${warehouseId}</p>
+//                     <p><strong>District:</strong> ${districtId}</p>
+//                 </div>
+//                 <div class="col-md-6">
+//                     <h6>Payment Summary</h6>
+//                     <p><strong>Total Payments:</strong> ${customerPayments.length}</p>
+//                     <p><strong>Total Amount:</strong> $${totalAmount.toFixed(2)}</p>
+//                     <p><strong>Average Payment:</strong> $${(totalAmount / customerPayments.length).toFixed(2)}</p>
+//                 </div>
+//             </div>
+            
+//             <h6>Payment History</h6>
+//             <div class="table-responsive">
+//                 <table class="table table-sm">
+//                     <thead>
+//                         <tr>
+//                             <th>Date</th>
+//                             <th>Amount</th>
+//                             <th>Description</th>
+//                         </tr>
+//                     </thead>
+//                     <tbody>
+//                         ${paymentRows}
+//                     </tbody>
+//                 </table>
+//             </div>
+//         `;
+//     } else {
+//         content.innerHTML = '<div class="alert alert-info">No payment history found for this customer.</div>';
+//     }
+// }
+
 function viewCustomerPayments(warehouseId, districtId, customerId) {
     const modal = new bootstrap.Modal(document.getElementById('customerPaymentsModal'));
     const content = document.getElementById('customerPaymentsContent');
-    
+
     showLoading(content);
     modal.show();
-    
-    // Filter current payments for this customer
-    const customerPayments = Array.from(document.querySelectorAll('tbody tr')).filter(row => {
-        const rowWarehouse = parseInt(row.cells[2].textContent);
-        const rowDistrict = parseInt(row.cells[3].textContent);
-        const rowCustomerId = parseInt(row.cells[1].querySelector('small').textContent.replace('ID: ', ''));
-        
-        return rowWarehouse === warehouseId && rowDistrict === districtId && rowCustomerId === customerId;
-    });
-    
-    if (customerPayments.length > 0) {
-        const firstPayment = customerPayments[0];
-        const customerName = firstPayment.cells[1].querySelector('div').textContent;
-        
-        let totalAmount = 0;
-        const paymentRows = customerPayments.map(row => {
-            const amount = parseFloat(row.cells[4].textContent.replace(/[$,]/g, ''));
-            totalAmount += amount;
-            
-            return `
+
+    fetch(`/api/customer_payment_summary?warehouse_id=${warehouseId}&district_id=${districtId}&customer_id=${customerId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                content.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+                return;
+            }
+
+            const { customer, payment_history, payment_stats } = data;
+
+            const paymentRows = payment_history.map(p => `
                 <tr>
-                    <td>${row.cells[0].innerHTML}</td>
-                    <td>${row.cells[4].innerHTML}</td>
-                    <td>${row.cells[5].textContent}</td>
+                    <td>${p.h_date}</td>
+                    <td>$${parseFloat(p.h_amount).toFixed(2)}</td>
+                    <td>${p.h_data}</td>
                 </tr>
+            `).join('');
+
+            content.innerHTML = `
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <h6>Customer Information</h6>
+                        <p><strong>Name:</strong> ${customer.c_first} ${customer.c_middle} ${customer.c_last}</p>
+                        <p><strong>Customer ID:</strong> ${customerId}</p>
+                        <p><strong>Warehouse:</strong> ${warehouseId}</p>
+                        <p><strong>District:</strong> ${districtId}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Payment Summary</h6>
+                        <p><strong>Total Payments:</strong> ${payment_stats.total_payments}</p>
+                        <p><strong>Total Amount:</strong> $${parseFloat(payment_stats.total_amount).toFixed(2)}</p>
+                        <p><strong>Average Payment:</strong> $${parseFloat(payment_stats.avg_amount).toFixed(2)}</p>
+                    </div>
+                </div>
+
+                <h6>Payment History</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Amount</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${paymentRows}
+                        </tbody>
+                    </table>
+                </div>
             `;
-        }).join('');
-        
-        content.innerHTML = `
-            <div class="row mb-3">
-                <div class="col-md-6">
-                    <h6>Customer Information</h6>
-                    <p><strong>Name:</strong> ${customerName}</p>
-                    <p><strong>Customer ID:</strong> ${customerId}</p>
-                    <p><strong>Warehouse:</strong> ${warehouseId}</p>
-                    <p><strong>District:</strong> ${districtId}</p>
-                </div>
-                <div class="col-md-6">
-                    <h6>Payment Summary</h6>
-                    <p><strong>Total Payments:</strong> ${customerPayments.length}</p>
-                    <p><strong>Total Amount:</strong> $${totalAmount.toFixed(2)}</p>
-                    <p><strong>Average Payment:</strong> $${(totalAmount / customerPayments.length).toFixed(2)}</p>
-                </div>
-            </div>
-            
-            <h6>Payment History</h6>
-            <div class="table-responsive">
-                <table class="table table-sm">
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Amount</th>
-                            <th>Description</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${paymentRows}
-                    </tbody>
-                </table>
-            </div>
-        `;
-    } else {
-        content.innerHTML = '<div class="alert alert-info">No payment history found for this customer.</div>';
-    }
+        })
+        .catch(err => {
+            content.innerHTML = `<div class="alert alert-danger">Error loading payment data.</div>`;
+            console.error(err);
+        });
 }
+
 
 function executeDelivery() {
     const warehouseId = parseInt(document.getElementById('delivery_warehouse_id').value);

@@ -59,23 +59,30 @@ class InventoryService:
         except Exception as e:
             logger.error(f"Get inventory service error: {str(e)}")
             return []
-
- 
+    
     def get_inventory_paginated(
-        self,
-        warehouse_id=None,
-        low_stock_threshold=10,
-        item_search=None,
-        limit=100,
-        offset=0
-    ):
+            self,
+            warehouse_id=None,
+            low_stock_threshold=10,
+            item_search=None,
+            limit=100,
+            offset=0
+        ):
         try:
             query = """
-                SELECT *
-                FROM stock
-                WHERE (%(warehouse_id)s IS NULL OR s_w_id = %(warehouse_id)s)
-                AND s_quantity <= %(low_stock_threshold)s
-                AND (%(item_search)s IS NULL OR s_data ILIKE %(item_search_like)s)
+                SELECT  s.s_i_id,
+                    s.s_w_id,
+                    s.s_quantity,
+                    s.s_ytd,
+                    s.s_order_cnt,
+                    s.s_data,
+                    i.i_name AS i_name,
+                    i.i_price AS i_price
+                FROM stock s
+                JOIN item i ON i.i_id = s.s_i_id
+                WHERE (%(warehouse_id)s IS NULL OR s.s_w_id = %(warehouse_id)s)
+                AND s.s_quantity <= %(low_stock_threshold)s
+                AND (%(item_search)s IS NULL OR i.i_name ILIKE %(item_search_like)s)
                 LIMIT %(limit)s OFFSET %(offset)s
             """
             params = {
@@ -106,6 +113,53 @@ class InventoryService:
                 "has_next": False,
                 "has_prev": False
             }
+
+ 
+    # def get_inventory_paginated(
+    #     self,
+    #     warehouse_id=None,
+    #     low_stock_threshold=10,
+    #     item_search=None,
+    #     limit=100,
+    #     offset=0
+    # ):
+    #     try:
+    #         query = """
+    #             SELECT *
+    #             FROM stock
+    #             WHERE (%(warehouse_id)s IS NULL OR s_w_id = %(warehouse_id)s)
+    #             AND s_quantity <= %(low_stock_threshold)s
+    #             AND (%(item_search)s IS NULL OR s_data ILIKE %(item_search_like)s)
+    #             LIMIT %(limit)s OFFSET %(offset)s
+    #         """
+    #         params = {
+    #             "warehouse_id": warehouse_id,
+    #             "low_stock_threshold": low_stock_threshold,
+    #             "item_search": item_search,
+    #             "item_search_like": f"%{item_search}%" if item_search else None,
+    #             "limit": limit,
+    #             "offset": offset
+    #         }
+    #         rows = self.db.fetch_all(query, params)
+
+    #         return {
+    #             "inventory": rows,
+    #             "total_count": len(rows),
+    #             "limit": limit,
+    #             "offset": offset,
+    #             "has_next": len(rows) == limit,
+    #             "has_prev": offset > 0
+    #         }
+    #     except Exception as e:
+    #         logger.error(f"Error loading inventory: {str(e)}")
+    #         return {
+    #             "inventory": [],
+    #             "total_count": 0,
+    #             "limit": limit,
+    #             "offset": offset,
+    #             "has_next": False,
+    #             "has_prev": False
+    #         }
 
 
     def get_low_stock_items(

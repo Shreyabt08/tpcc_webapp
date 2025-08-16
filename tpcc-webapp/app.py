@@ -6,6 +6,8 @@ NeonDB TPC-C Web Application
 import logging
 import os
 from datetime import datetime
+from datetime import datetime
+import time
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
@@ -20,6 +22,8 @@ from services.inventory_service import InventoryService
 from services.order_service import OrderService
 from services.payment_service import PaymentService
 from flask_sqlalchemy import SQLAlchemy
+        
+
 
 
 # Configure logging
@@ -88,9 +92,8 @@ def dashboard():
         # Get dashboard metrics
         logger.info("   Fetching dashboard metrics...")
         # breakpoint()
-        metrics = analytics_service.get_dashboard_metrics()
-        # stock = inventory_service.get_low_stock_items()
-        # print(f"Stock Qty :{stock}")
+        dashboard_data = analytics_service.get_dashboard_metrics()
+        metrics = dashboard_data.get("metrics", {})
         logger.info(f"   ✅ Dashboard metrics retrieved: {len(metrics)} metrics")
         return render_template(
             "dashboard.html", metrics=metrics, provider=db_connector.get_provider_name()
@@ -424,15 +427,58 @@ def payments():
         )
 
 
+@app.route("/api/order-status/<int:warehouse_id>/<int:district_id>/<int:customer_id>")
+def api_order_status(warehouse_id: int, district_id: int, customer_id: int):
+    """Get order status (TPC-C Order Status Transaction)"""
+    try:
+        result = order_service.get_order_status(
+            warehouse_id=warehouse_id, district_id=district_id, customer_id=customer_id
+        )
+
+        return jsonify(result)
+
+    except Exception as e:
+        logger.error(f"Order status API error: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/delivery", methods=["POST"])
+def delivery():
+    data = request.get_json()
+    warehouse_id = data.get("warehouse_id")
+    carrier_id = data.get("carrier_id")
+
+    try:
+        delivered_orders = order_service.execute_delivery(warehouse_id, carrier_id)
+        return jsonify({
+            "success": True,
+            "message": "Delivery completed",
+            "warehouse_id": warehouse_id,
+            "carrier_id": carrier_id,
+            "delivered_orders": delivered_orders or [],
+            "timestamp": datetime.utcnow().isoformat()
+        }), 200
+    except Exception as e:
+        app.logger.error(f"Delivery failed: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
 
 # API Endpoints for AJAX operations
+@app.route('/api/customer_payment_summary')
+def api_customer_payment_summary():
+    warehouse_id = int(request.args['warehouse_id'])
+    district_id = int(request.args['district_id'])
+    customer_id = int(request.args['customer_id'])
+
+    result = payment_service.get_customer_payment_summary(warehouse_id, district_id, customer_id)
+    return jsonify(result)
 
 
 @app.route("/api/new-order", methods=["POST"])
 def api_new_order():
     """Create a new order (TPC-C New Order Transaction)"""
-    import time
-
     start_time = time.time()
 
     try:
@@ -440,19 +486,19 @@ def api_new_order():
         data = request.get_json()
         logger.info(f"   Request data: {data}")
 
-        # Validate required fields
+        # Validate top-level fields
         required_fields = ["warehouse_id", "district_id", "customer_id", "items"]
         for field in required_fields:
             if field not in data:
                 logger.error(f"❌ Missing required field: {field}")
                 return jsonify({"error": f"Missing required field: {field}"}), 400
 
-        logger.info(
-            f"   Parameters: warehouse_id={data['warehouse_id']}, district_id={data['district_id']}, customer_id={data['customer_id']}, items_count={len(data['items'])}"
-        )
+        # Log item list
+        logger.info(f"   📦 Items: {len(data['items'])}")
+        for idx, item in enumerate(data["items"], 1):
+            logger.info(f"     Item {idx}: {item}")
 
-        # Execute new order transaction
-        logger.info("   🔄 Starting New Order Transaction...")
+        # Call service
         result = order_service.execute_new_order(
             warehouse_id=data["warehouse_id"],
             district_id=data["district_id"],
@@ -477,8 +523,6 @@ def api_new_order():
 @app.route("/api/payment", methods=["POST"])
 def api_payment():
     """Process a payment (TPC-C Payment Transaction)"""
-    import time
-
     start_time = time.time()
 
     try:
@@ -491,10 +535,11 @@ def api_payment():
         for field in required_fields:
             if field not in data:
                 logger.error(f"   ❌ Missing required field: {field}")
-                return jsonify({"error": f"Missing required field: {field}"}), 400
+                return jsonify({"isSuccess": False, "error": f"Missing required field: {field}"}), 400
 
         logger.info(
-            f"   Parameters: warehouse_id={data['warehouse_id']}, district_id={data['district_id']}, customer_id={data['customer_id']}, amount=${data['amount']:.2f}"
+            f"   Parameters: warehouse_id={data['warehouse_id']}, district_id={data['district_id']}, "
+            f"customer_id={data['customer_id']}, amount=${data['amount']:.2f}"
         )
 
         # Execute payment transaction
@@ -506,75 +551,70 @@ def api_payment():
             amount=data["amount"],
         )
 
+        # Convert result to JSON-compatible dict
+        json_result = {
+            "isSuccess": True,
+            "transaction_id": result["h_id"],
+            "customer_name": f"Customer {result['h_c_id']}",  # Replace if you have actual name
+            "amount": float(result["h_amount"]),
+            "new_balance": 1000.00,  # Replace with actual balance calculation if available
+            "timestamp": result["h_date"].isoformat(),
+            "data": result["h_data"]
+        }
+
         execution_time = (time.time() - start_time) * 1000
         logger.info(f"   ✅ Payment Transaction completed in {execution_time:.2f}ms")
-        logger.info(f"   Result: {result}")
+        logger.info(f"   Result: {json_result}")
 
-        return jsonify(result)
+        return jsonify(json_result)
 
     except Exception as e:
         execution_time = (time.time() - start_time) * 1000
         logger.error(f"   ❌ Payment API error after {execution_time:.2f}ms: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"isSuccess": False, "error": str(e)}), 500
 
+# @app.route("/api/stock-level/<int:warehouse_id>/<int:district_id>")
+# def api_stock_level(warehouse_id: int, district_id: int):
+#     """Get stock level (TPC-C Stock Level Transaction)"""
+#     try:
+#         threshold = request.args.get("threshold", 10, type=int)
 
-@app.route("/api/order-status/<int:warehouse_id>/<int:district_id>/<int:customer_id>")
-def api_order_status(warehouse_id: int, district_id: int, customer_id: int):
-    """Get order status (TPC-C Order Status Transaction)"""
-    try:
-        result = order_service.get_order_status(
-            warehouse_id=warehouse_id, district_id=district_id, customer_id=customer_id
-        )
+#         result = inventory_service.get_stock_level(
+#             warehouse_id=warehouse_id, district_id=district_id, threshold=threshold
+#         )
+#         # If result is None or empty, return 0
+#         if not result or not result.get("data"):
+#             return jsonify({"success": True, "data": 0})
 
-        return jsonify(result)
+#         return jsonify(result)
 
-    except Exception as e:
-        logger.error(f"Order status API error: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+#     except Exception as e:
+#         logger.error(f"Stock level API error: {str(e)}")
+#         return jsonify({"success": False, "error": str(e)}), 500
 
-
-@app.route("/api/delivery", methods=["POST"])
-def api_delivery():
-    """Execute delivery transaction (TPC-C Delivery Transaction)"""
-    try:
-        data = request.get_json()
-
-        # Validate required fields
-        required_fields = ["warehouse_id", "carrier_id"]
-        for field in required_fields:
-            if field not in data:
-                return jsonify({"error": f"Missing required field: {field}"}), 400
-
-        # Execute delivery transaction
-        result = order_service.execute_delivery(
-            warehouse_id=data["warehouse_id"], carrier_id=data["carrier_id"]
-        )
-
-        return jsonify(result)
-
-    except Exception as e:
-        logger.error(f"Delivery API error: {str(e)}")
-        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/stock-level/<int:warehouse_id>/<int:district_id>")
 def api_stock_level(warehouse_id: int, district_id: int):
-    """Get stock level (TPC-C Stock Level Transaction)"""
     try:
         threshold = request.args.get("threshold", 10, type=int)
+        low_stock_items = inventory_service.get_low_stock_items(warehouse_id, threshold=threshold)
 
-        result = inventory_service.get_stock_level(
-            warehouse_id=warehouse_id, district_id=district_id, threshold=threshold
-        )
-        # If result is None or empty, return 0
-        if not result or not result.get("data"):
-            return jsonify({"success": True, "data": 0})
-
-        return jsonify(result)
+        response = {
+            "success": True,
+            "warehouse_id": warehouse_id,
+            "district_id": district_id,
+            "threshold": threshold,
+            "low_stock_count": len(low_stock_items),
+            "low_stock_items": low_stock_items,
+        }
+        return jsonify(response)
 
     except Exception as e:
         logger.error(f"Stock level API error: {str(e)}")
         return jsonify({"success": False, "error": str(e)}), 500
+
+
 
 # Testing and Validation Endpoints
 
@@ -706,52 +746,47 @@ def api_test_multi_region_create_order():
             {"error": str(e), "execution_time_ms": round(execution_time, 2)}
         ), 500
 
-
 @app.route("/api/test/multi-region/orders-by-region")
 def api_test_multi_region_orders_by_region():
-    """Get orders grouped by region for multi-region testing"""
+    """Get orders grouped by region for multi-region testing (metadata only, no DB column)"""
     try:
         logger.info("🌍 Multi-region Orders by Region API called")
 
-        # Get orders with region information
+        # Query without region_created column
         query = """
             SELECT 
-                COALESCE(region_created, 'unknown') as region,
                 COUNT(*) as order_count,
                 MIN(o_entry_d) as first_order,
                 MAX(o_entry_d) as last_order
-            FROM orders 
-            GROUP BY COALESCE(region_created, 'unknown')
-            ORDER BY order_count DESC
+            FROM orders
         """
 
         results = db_connector.execute_query(query)
+        row = results[0] if results else None
 
-        # Format results
+        # Get region metadata from ENV
+        current_region = os.environ.get("REGION_NAME", "default")
+
         region_stats = []
-        for row in results:
+        if row:
             region_stats.append(
                 {
-                    "region": row["region"],
+                    "region": current_region,
                     "order_count": row["order_count"],
-                    "first_order": row["first_order"].isoformat()
-                    if row["first_order"]
-                    else None,
-                    "last_order": row["last_order"].isoformat()
-                    if row["last_order"]
-                    else None,
+                    "first_order": row["first_order"].isoformat() if row["first_order"] else None,
+                    "last_order": row["last_order"].isoformat() if row["last_order"] else None,
                 }
             )
 
         logger.info(
-            f"   ✅ Retrieved region statistics for {len(region_stats)} regions"
+            f"   ✅ Retrieved region statistics for {len(region_stats)} region(s)"
         )
 
         return jsonify(
             {
                 "success": True,
                 "region_stats": region_stats,
-                "current_region": os.environ.get("REGION_NAME", "default"),
+                "current_region": current_region,
                 "provider": db_connector.get_provider_name(),
             }
         )
@@ -761,16 +796,135 @@ def api_test_multi_region_orders_by_region():
         return jsonify({"error": str(e)}), 500
 
 
+# @app.route("/api/test/multi-region/orders-by-region")
+# def api_test_multi_region_orders_by_region():
+#     """Get orders grouped by region for multi-region testing"""
+#     try:
+#         logger.info("🌍 Multi-region Orders by Region API called")
+
+#         # Get orders with region information
+#         query = """
+#             SELECT 
+#                 COALESCE(region_created, 'unknown') as region,
+#                 COUNT(*) as order_count,
+#                 MIN(o_entry_d) as first_order,
+#                 MAX(o_entry_d) as last_order
+#             FROM orders 
+#             GROUP BY COALESCE(region_created, 'unknown')
+#             ORDER BY order_count DESC
+#         """
+
+#         results = db_connector.execute_query(query)
+
+#         # Format results
+#         region_stats = []
+#         for row in results:
+#             region_stats.append(
+#                 {
+#                     "region": row["region"],
+#                     "order_count": row["order_count"],
+#                     "first_order": row["first_order"].isoformat()
+#                     if row["first_order"]
+#                     else None,
+#                     "last_order": row["last_order"].isoformat()
+#                     if row["last_order"]
+#                     else None,
+#                 }
+#             )
+
+#         logger.info(
+#             f"   ✅ Retrieved region statistics for {len(region_stats)} regions"
+#         )
+
+#         return jsonify(
+#             {
+#                 "success": True,
+#                 "region_stats": region_stats,
+#                 "current_region": os.environ.get("REGION_NAME", "default"),
+#                 "provider": db_connector.get_provider_name(),
+#             }
+#         )
+
+#     except Exception as e:
+#         logger.error(f"Multi-region orders by region API error: {str(e)}")
+#         return jsonify({"error": str(e)}), 500
+
+
+# @app.route("/api/test/multi-region/recent-orders")
+# def api_test_multi_region_recent_orders():
+#     """Get recent orders with region information for multi-region testing"""
+#     try:
+#         logger.info("🌍 Multi-region Recent Orders API called")
+
+#         limit = request.args.get("limit", 20, type=int)
+
+#         # Get recent orders with region information
+#         # Note: Changed 'no' alias to 'new_ord' to avoid Spanner reserved keyword conflict
+#         query = """
+#             SELECT 
+#                 o.o_id,
+#                 o.o_w_id,
+#                 o.o_d_id,
+#                 o.o_c_id,
+#                 o.o_entry_d,
+#                 COALESCE(o.region_created, 'unknown') as region_created,
+#                 c.c_first,
+#                 c.c_middle,
+#                 c.c_last,
+#                 CASE WHEN new_ord.no_o_id IS NOT NULL THEN 'New' ELSE 'Delivered' END as status
+#             FROM orders o
+#             JOIN customer c ON c.c_w_id = o.o_w_id AND c.c_d_id = o.o_d_id AND c.c_id = o.o_c_id
+#             LEFT JOIN new_order new_ord ON new_ord.no_w_id = o.o_w_id AND new_ord.no_d_id = o.o_d_id AND new_ord.no_o_id = o.o_id
+#             ORDER BY o.o_entry_d DESC
+#             LIMIT %s
+#         """
+
+#         results = db_connector.execute_query(query, (limit,))
+
+#         # Format results
+#         orders = []
+#         for row in results:
+#             orders.append(
+#                 {
+#                     "order_id": row["o_id"],
+#                     "warehouse_id": row["o_w_id"],
+#                     "district_id": row["o_d_id"],
+#                     "customer_id": row["o_c_id"],
+#                     "order_date": row["o_entry_d"].isoformat()
+#                     if row["o_entry_d"]
+#                     else None,
+#                     "region_created": row["region_created"],
+#                     "customer_name": f"{row['c_first']} {row['c_middle']} {row['c_last']}",
+#                     "status": row["status"],
+#                 }
+#             )
+
+#         logger.info(
+#             f"   ✅ Retrieved {len(orders)} recent orders with region information"
+#         )
+
+#         return jsonify(
+#             {
+#                 "success": True,
+#                 "orders": orders,
+#                 "current_region": os.environ.get("REGION_NAME", "default"),
+#                 "provider": db_connector.get_provider_name(),
+#             }
+#         )
+
+#     except Exception as e:
+#         logger.error(f"Multi-region recent orders API error: {str(e)}")
+#         return jsonify({"error": str(e)}), 500
+
 @app.route("/api/test/multi-region/recent-orders")
 def api_test_multi_region_recent_orders():
-    """Get recent orders with region information for multi-region testing"""
+    """Get recent orders with region metadata for multi-region testing"""
     try:
         logger.info("🌍 Multi-region Recent Orders API called")
 
         limit = request.args.get("limit", 20, type=int)
 
-        # Get recent orders with region information
-        # Note: Changed 'no' alias to 'new_ord' to avoid Spanner reserved keyword conflict
+        # Query without o.region_created
         query = """
             SELECT 
                 o.o_id,
@@ -778,21 +932,28 @@ def api_test_multi_region_recent_orders():
                 o.o_d_id,
                 o.o_c_id,
                 o.o_entry_d,
-                COALESCE(o.region_created, 'unknown') as region_created,
                 c.c_first,
                 c.c_middle,
                 c.c_last,
                 CASE WHEN new_ord.no_o_id IS NOT NULL THEN 'New' ELSE 'Delivered' END as status
             FROM orders o
-            JOIN customer c ON c.c_w_id = o.o_w_id AND c.c_d_id = o.o_d_id AND c.c_id = o.o_c_id
-            LEFT JOIN new_order new_ord ON new_ord.no_w_id = o.o_w_id AND new_ord.no_d_id = o.o_d_id AND new_ord.no_o_id = o.o_id
+            JOIN customer c 
+                ON c.c_w_id = o.o_w_id 
+               AND c.c_d_id = o.o_d_id 
+               AND c.c_id = o.o_c_id
+            LEFT JOIN new_order new_ord 
+                ON new_ord.no_w_id = o.o_w_id 
+               AND new_ord.no_d_id = o.o_d_id 
+               AND new_ord.no_o_id = o.o_id
             ORDER BY o.o_entry_d DESC
             LIMIT %s
         """
 
         results = db_connector.execute_query(query, (limit,))
 
-        # Format results
+        current_region = os.environ.get("REGION_NAME", "default")
+
+        # Format results and inject region metadata
         orders = []
         for row in results:
             orders.append(
@@ -801,24 +962,22 @@ def api_test_multi_region_recent_orders():
                     "warehouse_id": row["o_w_id"],
                     "district_id": row["o_d_id"],
                     "customer_id": row["o_c_id"],
-                    "order_date": row["o_entry_d"].isoformat()
-                    if row["o_entry_d"]
-                    else None,
-                    "region_created": row["region_created"],
+                    "order_date": row["o_entry_d"].isoformat() if row["o_entry_d"] else None,
+                    "region_created": current_region,  # inject from ENV instead of DB
                     "customer_name": f"{row['c_first']} {row['c_middle']} {row['c_last']}",
                     "status": row["status"],
                 }
             )
 
         logger.info(
-            f"   ✅ Retrieved {len(orders)} recent orders with region information"
+            f"   ✅ Retrieved {len(orders)} recent orders with region metadata"
         )
 
         return jsonify(
             {
                 "success": True,
                 "orders": orders,
-                "current_region": os.environ.get("REGION_NAME", "default"),
+                "current_region": current_region,
                 "provider": db_connector.get_provider_name(),
             }
         )

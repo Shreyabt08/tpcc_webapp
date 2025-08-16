@@ -5,6 +5,7 @@ Uses skeleton connectors that participants will implement
 
 import logging
 from typing import Any, Dict
+from datetime import datetime, timedelta
 
 # from database.base_connector import create_study_connector
 
@@ -76,14 +77,108 @@ class AnalyticsService:
                 "provider": self.connector.get_provider_name(),
             }
 
-   
-    def get_dashboard_metrics(self) -> Dict[str, Any]:
-        """
-        Get dashboard metrics for the study webapp
+    # def get_dashboard_metrics(self) -> Dict[str, Any]:
+    #     if not self.connector:
+    #         return {
+    #             "error": "No database connector available",
+    #             "metrics": self._get_default_metrics(),
+    #         }
 
-        Returns:
-            dict: Dashboard metrics or error information
-        """
+    #     try:
+    #         if not self.connector.test_connection():
+    #             return {
+    #                 "error": "Database connection failed",
+    #                 "metrics": self._get_default_metrics(),
+    #             }
+
+    #         metrics = {}
+
+    #         # Warehouse count
+    #         try:
+    #             result = self.connector.execute_query("SELECT COUNT(*) as count FROM warehouse")
+    #             metrics["total_warehouses"] = result[0].get("count", 0) if result else 0
+    #         except Exception as e:
+    #             logger.warning(f"Failed to get warehouse count: {str(e)}")
+    #             metrics["total_warehouses"] = 0
+
+    #         # Customer count
+    #         try:
+    #             result = self.connector.execute_query("SELECT COUNT(*) as count FROM customer")
+    #             metrics["total_customers"] = result[0].get("count", 0) if result else 0
+    #         except Exception as e:
+    #             logger.warning(f"Failed to get customer count: {str(e)}")
+    #             metrics["total_customers"] = 0
+
+    #         # Order count
+    #         try:
+    #             result = self.connector.execute_query("SELECT COUNT(*) as count FROM orders")
+    #             metrics["total_orders"] = result[0].get("count", 0) if result else 0
+    #         except Exception as e:
+    #             logger.warning(f"Failed to get order count: {str(e)}")
+    #             metrics["total_orders"] = 0
+
+    #         # Item count
+    #         try:
+    #             result = self.connector.execute_query("SELECT COUNT(*) as count FROM item")
+    #             metrics["total_items"] = result[0].get("count", 0) if result else 0
+    #         except Exception as e:
+    #             logger.warning(f"Failed to get item count: {str(e)}")
+    #             metrics["total_items"] = 0
+
+    #         # Recent orders and avg value in last 24h
+    #         try:
+    #             query_recent = """
+    #             SELECT COUNT(*) AS orders_last_24h
+    #                 FROM orders
+    #                 WHERE o_entry_d >= NOW() - INTERVAL '24 HOURS';
+    #             """
+    #             result = self.connector.execute_query(query_recent)
+
+    #             if result and len(result) > 0:
+    #                 metrics["orders_last_24h"] = result[0].get("orders_last_24h", 0)
+    #                 avg_val = result[0].get("avg_order_value")
+    #                 metrics["avg_order_value"] = float(avg_val) if avg_val is not None else 0.0
+    #             else:
+    #                 metrics["orders_last_24h"] = 0
+    #                 metrics["avg_order_value"] = 0.0
+    #         query_avg_order_value = """
+    #                 SELECT 
+    #                     AVG(sub.total_amount) AS avg_order_value
+    #                 FROM (
+    #                     SELECT ol_o_id, SUM(ol_amount) AS total_amount
+    #                     FROM order_line
+    #                     WHERE ol_delivery_d >= NOW() - INTERVAL '24 HOURS'
+    #                     GROUP BY ol_o_id
+    #                 ) sub;
+    #             """
+
+    #     result = self.connector.execute_query(query_avg_order_value)
+
+    #     if result and len(result) > 0:
+    #         avg_val = result[0].get("avg_order_value")
+    #         metrics["avg_order_value"] = float(avg_val) if avg_val is not None else 0.0
+    #     else:
+    #         metrics["avg_order_value"] = 0.0
+    #         except Exception as e:
+    #             logger.warning(f"Failed to get recent orders metrics: {str(e)}")
+    #             metrics["orders_last_24h"] = 0
+    #             metrics["avg_order_value"] = 0.0
+
+    #         return {
+    #             "success": True,
+    #             "provider": self.connector.get_provider_name(),
+    #             "metrics": metrics,
+    #         }
+
+    #     except Exception as e:
+    #         logger.error(f"Failed to get dashboard metrics: {str(e)}")
+    #         return {
+    #             "error": str(e),
+    #             "provider": self.connector.get_provider_name() if self.connector else "Unknown",
+    #             "metrics": self._get_default_metrics(),
+    #         }
+
+    def get_dashboard_metrics(self) -> Dict[str, Any]:
         if not self.connector:
             return {
                 "error": "No database connector available",
@@ -91,66 +186,108 @@ class AnalyticsService:
             }
 
         try:
-            # Test connection first
             if not self.connector.test_connection():
                 return {
                     "error": "Database connection failed",
                     "metrics": self._get_default_metrics(),
                 }
 
-            # Try to get basic metrics using simple queries
             metrics = {}
 
-            # Get warehouse count
+            # Warehouse count
             try:
-                result = self.connector.execute_query(
-                    "SELECT COUNT(*) as count FROM warehouse"
-                )
-                if result and "count" in result[0]:
-                    warehouse_count = result[0]["count"]
-                else:
-                    warehouse_count = 0
-                
-                metrics["total_warehouses"] = warehouse_count
-                # metrics["total_warehouses"] = result[0]["count"] if result else 0
+                result = self.connector.execute_query("SELECT COUNT(*) as count FROM warehouse")
+                metrics["total_warehouses"] = result[0].get("count", 0) if result else 0
             except Exception as e:
                 logger.warning(f"Failed to get warehouse count: {str(e)}")
                 metrics["total_warehouses"] = 0
 
-            # Get customer count
+            # Customer count
             try:
-                result = self.connector.execute_query(
-                    "SELECT COUNT(*) as count FROM customer"
-                )
-                if result and "count" in result[0]:
-                    customer_count = result[0]["count"]
-                else:
-                    customer_count = 0
-                # print("Customer_count: {customer_count}") 
-                metrics["total_customers"] = customer_count
+                result = self.connector.execute_query("SELECT COUNT(*) as count FROM customer")
+                metrics["total_customers"] = result[0].get("count", 0) if result else 0
             except Exception as e:
                 logger.warning(f"Failed to get customer count: {str(e)}")
                 metrics["total_customers"] = 0
 
-            # Get order count
+            # Order count
             try:
-                result = self.connector.execute_query(
-                    "SELECT COUNT(*) as count FROM orders"
-                )
-                metrics["total_orders"] = result[0]["count"] if result else 0
+                result = self.connector.execute_query("SELECT COUNT(*) as count FROM orders")
+                metrics["total_orders"] = result[0].get("count", 0) if result else 0
             except Exception as e:
                 logger.warning(f"Failed to get order count: {str(e)}")
                 metrics["total_orders"] = 0
 
-            # Get item count
+            # Item count
             try:
-                result = self.connector.execute_query(
-                    "SELECT COUNT(*) as count FROM item"
-                )
-                metrics["total_items"] = result[0]["count"] if result else 0
+                result = self.connector.execute_query("SELECT COUNT(*) as count FROM item")
+                metrics["total_items"] = result[0].get("count", 0) if result else 0
             except Exception as e:
                 logger.warning(f"Failed to get item count: {str(e)}")
                 metrics["total_items"] = 0
+
+            # Recent orders count (last 24 hours)
+            try:
+                query_recent = """
+                    SELECT COUNT(*) AS orders_last_24h
+                    FROM orders
+                    WHERE o_entry_d >= NOW() - INTERVAL '24 HOURS';
+                """
+                result = self.connector.execute_query(query_recent)
+                metrics["orders_last_24h"] = result[0].get("orders_last_24h", 0) if result else 0
+            except Exception as e:
+                logger.warning(f"Failed to get orders last 24h: {str(e)}")
+                metrics["orders_last_24h"] = 0
+
+            try:
+                query_recent = """
+                SELECT Count(*) As low_stock_items
+                FROM stock s
+                JOIN item i ON i.i_id = s.s_i_id
+                JOIN warehouse w ON w.w_id = s.s_w_id
+                WHERE s.s_quantity < 100
+                LIMIT 10;
+                """
+                result = self.connector.execute_query(query_recent)
+                metrics["low_stock_items"] = result[0].get("low_stock_items", 0) if result else 0
+            except Exception as e:
+                logger.warning(f"Failed to get low stock items: {str(e)}")
+                metrics["low_stock_items"] = []
+
+            try:
+                query_recent = """
+                SELECT Count(*) As stock_items
+                FROM stock s
+                JOIN item i ON i.i_id = s.s_i_id
+                JOIN warehouse w ON w.w_id = s.s_w_id
+                """
+                result = self.connector.execute_query(query_recent)
+                metrics["stock_items"] = result[0].get("stock_items", 0) if result else 0
+            except Exception as e:
+                logger.warning(f"Failed to get stock items: {str(e)}")
+                metrics["stock_items"] = []
+
+            # Average order value (last 24 hours)
+            try:
+                query_avg_order_value = """
+                    SELECT 
+                        AVG(sub.total_amount) AS avg_order_value
+                    FROM (
+                        SELECT ol_o_id, SUM(ol_amount) AS total_amount
+                        FROM order_line
+                        WHERE ol_delivery_d >= NOW() - INTERVAL '24 HOURS'
+                        GROUP BY ol_o_id
+                    ) sub;
+                """
+                result = self.connector.execute_query(query_avg_order_value)
+                if result and len(result) > 0:
+                    avg_val = result[0].get("avg_order_value")
+                    metrics["avg_order_value"] = float(avg_val) if avg_val is not None else 0.0
+                else:
+                    metrics["avg_order_value"] = 0.0
+            except Exception as e:
+                logger.warning(f"Failed to get average order value: {str(e)}")
+                metrics["avg_order_value"] = 0.0
 
             return {
                 "success": True,
@@ -162,11 +299,196 @@ class AnalyticsService:
             logger.error(f"Failed to get dashboard metrics: {str(e)}")
             return {
                 "error": str(e),
-                "provider": self.connector.get_provider_name()
-                if self.connector
-                else "Unknown",
+                "provider": self.connector.get_provider_name() if self.connector else "Unknown",
                 "metrics": self._get_default_metrics(),
             }
+
+
+    # def get_dashboard_metrics(self) -> Dict[str, Any]:
+    #     if not self.connector:
+    #         return {
+    #             "error": "No database connector available",
+    #             "metrics": self._get_default_metrics(),
+    #         }
+
+    #     try:
+    #         if not self.connector.test_connection():
+    #             return {
+    #                 "error": "Database connection failed",
+    #                 "metrics": self._get_default_metrics(),
+    #             }
+
+    #         metrics = {}
+
+    #         # Warehouse count
+    #         try:
+    #             result = self.connector.execute_query("SELECT COUNT(*) as count FROM warehouse")
+    #             metrics["total_warehouses"] = result[0].get("count", 0) if result else 0
+    #         except Exception as e:
+    #             logger.warning(f"Failed to get warehouse count: {str(e)}")
+    #             metrics["total_warehouses"] = 0
+
+    #         # Customer count
+    #         try:
+    #             result = self.connector.execute_query("SELECT COUNT(*) as count FROM customer")
+    #             metrics["total_customers"] = result[0].get("count", 0) if result else 0
+    #         except Exception as e:
+    #             logger.warning(f"Failed to get customer count: {str(e)}")
+    #             metrics["total_customers"] = 0
+
+    #         # Order count
+    #         try:
+    #             result = self.connector.execute_query("SELECT COUNT(*) as count FROM orders")
+    #             metrics["total_orders"] = result[0].get("count", 0) if result else 0
+    #         except Exception as e:
+    #             logger.warning(f"Failed to get order count: {str(e)}")
+    #             metrics["total_orders"] = 0
+
+    #         # Item count
+    #         try:
+    #             result = self.connector.execute_query("SELECT COUNT(*) as count FROM item")
+    #             metrics["total_items"] = result[0].get("count", 0) if result else 0
+    #         except Exception as e:
+    #             logger.warning(f"Failed to get item count: {str(e)}")
+    #             metrics["total_items"] = 0
+
+    #         # Recent orders count and average order value (last 24 hours)
+    #         try:
+    #             since = datetime.utcnow() - timedelta(days=1)
+    #             query_recent = """
+    #                             SELECT 
+    #                 COUNT(DISTINCT o_id) AS orders_last_24h,
+    #                 AVG(sub.total_amount) AS avg_order_value
+    #             FROM (
+    #                 SELECT ol_o_id AS o_id, SUM(ol_amount) AS total_amount
+    #                 FROM order_line
+    #                 WHERE ol_delivery_d >= NOW() - INTERVAL '24 HOURS'
+    #                 GROUP BY ol_o_id
+    #             ) sub;
+
+                 
+    #             """
+    #             result = self.connector.execute_query(query_recent, (since,))
+
+    #             print(f"Dashboard : {result}")
+    #             if result and len(result) > 0:
+    #                 metrics["orders_last_24h"] = result[0].get("orders_last_24h", 0)
+    #                 avg_val = result[0].get("avg_order_value")
+    #                 metrics["avg_order_value"] = float(avg_val) if avg_val is not None else 0.0
+    #             else:
+    #                 metrics["orders_last_24h"] = 0
+    #                 metrics["avg_order_value"] = 0.0
+    #         except Exception as e:
+    #             logger.warning(f"Failed to get recent orders metrics: {str(e)}")
+    #             metrics["orders_last_24h"] = 0
+    #             metrics["avg_order_value"] = 0.0
+
+    #         return {
+    #             "success": True,
+    #             "provider": self.connector.get_provider_name(),
+    #             "metrics": metrics,
+    #         }
+
+    #     except Exception as e:
+    #         logger.error(f"Failed to get dashboard metrics: {str(e)}")
+    #         return {
+    #             "error": str(e),
+    #             "provider": self.connector.get_provider_name() if self.connector else "Unknown",
+    #             "metrics": self._get_default_metrics(),
+    #         }
+
+
+   
+    # def get_dashboard_metrics(self) -> Dict[str, Any]:
+    #     """
+    #     Get dashboard metrics for the study webapp
+
+    #     Returns:
+    #         dict: Dashboard metrics or error information
+    #     """
+    #     if not self.connector:
+    #         return {
+    #             "error": "No database connector available",
+    #             "metrics": self._get_default_metrics(),
+    #         }
+
+    #     try:
+    #         # Test connection first
+    #         if not self.connector.test_connection():
+    #             return {
+    #                 "error": "Database connection failed",
+    #                 "metrics": self._get_default_metrics(),
+    #             }
+
+    #         # Try to get basic metrics using simple queries
+    #         metrics = {}
+
+    #         # Get warehouse count
+    #         try:
+    #             result = self.connector.execute_query(
+    #                 "SELECT COUNT(*) as count FROM warehouse"
+    #             )
+    #             if result and "count" in result[0]:
+    #                 warehouse_count = result[0]["count"]
+    #             else:
+    #                 warehouse_count = 0
+                
+    #             metrics["total_warehouses"] = warehouse_count
+    #             # metrics["total_warehouses"] = result[0]["count"] if result else 0
+    #         except Exception as e:
+    #             logger.warning(f"Failed to get warehouse count: {str(e)}")
+    #             metrics["total_warehouses"] = 0
+
+    #         # Get customer count
+    #         try:
+    #             result = self.connector.execute_query(
+    #                 "SELECT COUNT(*) as count FROM customer"
+    #             )
+    #             if result and "count" in result[0]:
+    #                 customer_count = result[0]["count"]
+    #             else:
+    #                 customer_count = 0
+    #             # print("Customer_count: {customer_count}") 
+    #             metrics["total_customers"] = customer_count
+    #         except Exception as e:
+    #             logger.warning(f"Failed to get customer count: {str(e)}")
+    #             metrics["total_customers"] = 0
+
+    #         # Get order count
+    #         try:
+    #             result = self.connector.execute_query(
+    #                 "SELECT COUNT(*) as count FROM orders"
+    #             )
+    #             metrics["total_orders"] = result[0]["count"] if result else 0
+    #         except Exception as e:
+    #             logger.warning(f"Failed to get order count: {str(e)}")
+    #             metrics["total_orders"] = 0
+
+    #         # Get item count
+    #         try:
+    #             result = self.connector.execute_query(
+    #                 "SELECT COUNT(*) as count FROM item"
+    #             )
+    #             metrics["total_items"] = result[0]["count"] if result else 0
+    #         except Exception as e:
+    #             logger.warning(f"Failed to get item count: {str(e)}")
+    #             metrics["total_items"] = 0
+
+    #         return {
+    #             "success": True,
+    #             "provider": self.connector.get_provider_name(),
+    #             "metrics": metrics,
+    #         }
+
+    #     except Exception as e:
+    #         logger.error(f"Failed to get dashboard metrics: {str(e)}")
+    #         return {
+    #             "error": str(e),
+    #             "provider": self.connector.get_provider_name()
+    #             if self.connector
+    #             else "Unknown",
+    #             "metrics": self._get_default_metrics(),
+    #         }
 
     def get_orders(self, limit: int = 10) -> Dict[str, Any]:
         """

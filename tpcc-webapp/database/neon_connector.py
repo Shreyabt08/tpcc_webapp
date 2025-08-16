@@ -159,8 +159,20 @@ class NeonConnector(BaseDatabaseConnector):
     
     def fetch_one(self, query, params=None):
         with self.connection.cursor(cursor_factory=RealDictCursor) as cursor:
-            cursor.execute(query, params or {})
-            return cursor.fetchone()  
+            cursor.execute(query, params or ())
+            result = cursor.fetchone()
+            print(f"fetch_one result: {result}")
+            return result
+
+        with self.connection.cursor(cursor_factory=RealDictCursor) as cursor:
+            if params is None:
+                params = ()  # Pass empty tuple if no params
+            cursor.execute(query, params)
+            return cursor.fetchone()
+    # def fetch_one(self, query, params=None):
+    #     with self.connection.cursor(cursor_factory=RealDictCursor) as cursor:
+    #         cursor.execute(query, params or {})
+    #         return cursor.fetchone()  
         
     def fetch_all(self, query, params=None):
         with self.connection.cursor(cursor_factory=RealDictCursor) as cursor:

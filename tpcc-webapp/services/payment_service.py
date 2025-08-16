@@ -22,12 +22,15 @@ class PaymentService:
     def execute_payment(self, warehouse_id: int, district_id: int, customer_id: int, amount: float):
         """Run payment transaction in DB"""
         try:
+            logger.info(f"Inserting payment: W_ID={warehouse_id}, D_ID={district_id}, C_ID={customer_id}, Amount={amount}")
+
             with self.connection.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
-                    INSERT INTO History (h_w_id, h_d_id, h_c_id, h_date, h_amount, h_data)
-                    VALUES (%s, %s, %s, NOW(), %s, %s)
+                    INSERT INTO History (h_w_id, h_c_d_id, h_c_w_id, h_d_id, h_c_id, h_date, h_amount, h_data)
+                    VALUES (%s, %s, %s, %s, %s, NOW(), %s, %s)
                     RETURNING *;
-                """, (warehouse_id, district_id, customer_id, amount, 'Payment transaction'))
+                """, (warehouse_id, district_id, warehouse_id, district_id, customer_id, amount, 'Payment transaction'))
+
                 
                 self.connection.commit()
                 return cur.fetchone()
@@ -53,6 +56,7 @@ class PaymentService:
             logger.error(f"Get payment history service error: {str(e)}")
             return []
 
+
     def get_payment_history_paginated(
         self,
         warehouse_id: Optional[int] = None,
@@ -68,12 +72,12 @@ class PaymentService:
                 SELECT h_id, h_c_id, h_c_d_id, h_c_w_id, h_d_id, h_w_id, h_date, h_amount, h_data
                 FROM History
                 WHERE (%(warehouse_id)s IS NULL OR h_w_id = %(warehouse_id)s)
-                AND (%(district_id)s IS NULL OR h_d_id = %(district_id)s)
+                AND (%(district_id)s IS NULL OR h_c_d_id = %(district_id)s)
                 AND (%(customer_id)s IS NULL OR h_c_id = %(customer_id)s)
                 ORDER BY h_date DESC
                 LIMIT %(limit)s OFFSET %(offset)s
             """
-
+            
             params = {
                 "warehouse_id": warehouse_id,
                 "district_id": district_id,
@@ -169,6 +173,7 @@ class PaymentService:
             stats_result = self.db.execute_query(
                 stats_query, (warehouse_id, district_id, customer_id)
             )
+            print(stats_result)
 
             payment_stats = stats_result[0] if stats_result else {}
 

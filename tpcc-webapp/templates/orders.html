@@ -45,11 +45,11 @@
             </div>
             <div class="col-md-2">
                 <label for="status" class="form-label">Status</label>
-                <select class="form-select" id="status" name="status">
-                    <option value="">All Status</option>
-                    <option value="new" {% if filters.status == 'pending' %}selected{% endif %}>Pending</option>
-                    <option value="delivered" {% if filters.status == 'delivered' %}selected{% endif %}>Delivered</option>
-                </select>
+                    <select class="form-select" id="status" name="status">
+                        <option value="">All Status</option>
+                        <option value="New" {% if filters.status == 'New' %}selected{% endif %}>New</option>
+                        <option value="Delivered" {% if filters.status == 'Delivered' %}selected{% endif %}>Delivered</option>
+                    </select>
             </div>
             <div class="col-md-2">
                 <label for="limit" class="form-label">Limit</label>
@@ -151,11 +151,11 @@
                             <span class="badge bg-info">{{ order.o_ol_cnt }} items</span>
                         </td>
                         <td>
-                            {% if order.status == 'New' %}
-                            <span class="badge bg-success">{{ order.status }}</span>
-                            {% else %}
-                            <span class="badge bg-secondary">{{ order.status }}</span>
-                            {% endif %}
+                                {% if order.status == 'New' %}
+                                    <span class="badge bg-success">New</span>
+                                {% elif order.status == 'Delivered' %}
+                                    <span class="badge bg-secondary">Delivered</span>
+                                {% endif %}
                         </td>
                         <td>
                             {% if order.o_carrier_id %}
@@ -377,7 +377,6 @@ function removeOrderItem(button) {
 }
 
 function submitNewOrder() {
-    const form = document.getElementById('newOrderForm');
     const warehouseId = parseInt(document.getElementById('new_warehouse_id').value);
     const districtId = parseInt(document.getElementById('new_district_id').value);
     const customerId = parseInt(document.getElementById('new_customer_id').value);
@@ -400,8 +399,9 @@ function submitNewOrder() {
         }
         
         items.push({
-            item_id: itemId,
-            quantity: quantity
+            i_id: itemId,      // match backend expectation
+            quantity: quantity,// amount will be calculated on backend
+            warehouse_id: warehouseId,
         });
     }
     
@@ -432,6 +432,64 @@ function submitNewOrder() {
             submitBtn.disabled = false;
         });
 }
+
+
+// function submitNewOrder() {
+//     const form = document.getElementById('newOrderForm');
+//     const warehouseId = parseInt(document.getElementById('new_warehouse_id').value);
+//     const districtId = parseInt(document.getElementById('new_district_id').value);
+//     const customerId = parseInt(document.getElementById('new_customer_id').value);
+    
+//     if (!warehouseId || !districtId || !customerId) {
+//         alert('Please fill in all required fields');
+//         return;
+//     }
+    
+//     const items = [];
+//     const orderItems = document.querySelectorAll('.order-item');
+    
+//     for (let item of orderItems) {
+//         const itemId = parseInt(item.querySelector('.item-id').value);
+//         const quantity = parseInt(item.querySelector('.item-quantity').value);
+        
+//         if (!itemId || !quantity) {
+//             alert('Please fill in all item details');
+//             return;
+//         }
+        
+//         items.push({
+//             i_id: itemId,
+//             quantity: quantity
+//         });
+//     }
+    
+//     const orderData = {
+//         warehouse_id: warehouseId,
+//         district_id: districtId,
+//         customer_id: customerId,
+//         items: items
+//     };
+    
+//     // Show loading
+//     const submitBtn = event.target;
+//     const originalText = submitBtn.innerHTML;
+//     submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Creating...';
+//     submitBtn.disabled = true;
+    
+//     makeRequest('/api/new-order', 'POST', orderData)
+//         .then(response => {
+//             if (response.success) {
+//                 alert('Order created successfully! Order ID: ' + response.order_id);
+//                 location.reload();
+//             } else {
+//                 alert('Error creating order: ' + (response.error || 'Unknown error'));
+//             }
+//         })
+//         .finally(() => {
+//             submitBtn.innerHTML = originalText;
+//             submitBtn.disabled = false;
+//         });
+// }
 
 function viewOrderStatus(warehouseId, districtId, customerId) {
     const modal = new bootstrap.Modal(document.getElementById('orderStatusModal'));
