@@ -746,8 +746,8 @@ def api_test_multi_region_create_order():
             {"error": str(e), "execution_time_ms": round(execution_time, 2)}
         ), 500
 
-@app.route("/api/test/multi-region/orders-by-region")
-def api_test_multi_region_orders_by_region():
+# @app.route("/api/test/multi-region/orders-by-region")
+# def api_test_multi_region_orders_by_region():
     """Get orders grouped by region for multi-region testing (metadata only, no DB column)"""
     try:
         logger.info("🌍 Multi-region Orders by Region API called")
@@ -796,135 +796,70 @@ def api_test_multi_region_orders_by_region():
         return jsonify({"error": str(e)}), 500
 
 
-# @app.route("/api/test/multi-region/orders-by-region")
-# def api_test_multi_region_orders_by_region():
-#     """Get orders grouped by region for multi-region testing"""
-#     try:
-#         logger.info("🌍 Multi-region Orders by Region API called")
+@app.route("/api/test/multi-region/orders-by-region")
+def api_test_multi_region_orders_by_region():
+    """Get orders grouped by region for multi-region testing"""
+    try:
+        logger.info("🌍 Multi-region Orders by Region API called")
 
-#         # Get orders with region information
-#         query = """
-#             SELECT 
-#                 COALESCE(region_created, 'unknown') as region,
-#                 COUNT(*) as order_count,
-#                 MIN(o_entry_d) as first_order,
-#                 MAX(o_entry_d) as last_order
-#             FROM orders 
-#             GROUP BY COALESCE(region_created, 'unknown')
-#             ORDER BY order_count DESC
-#         """
+        # Get orders with region information
+        query = """
+            SELECT 
+                COALESCE(region_created, 'unknown') as region,
+                COUNT(*) as order_count,
+                MIN(o_entry_d) as first_order,
+                MAX(o_entry_d) as last_order
+            FROM orders 
+            GROUP BY COALESCE(region_created, 'unknown')
+            ORDER BY order_count DESC
+        """
 
-#         results = db_connector.execute_query(query)
+        results = db_connector.execute_query(query)
 
-#         # Format results
-#         region_stats = []
-#         for row in results:
-#             region_stats.append(
-#                 {
-#                     "region": row["region"],
-#                     "order_count": row["order_count"],
-#                     "first_order": row["first_order"].isoformat()
-#                     if row["first_order"]
-#                     else None,
-#                     "last_order": row["last_order"].isoformat()
-#                     if row["last_order"]
-#                     else None,
-#                 }
-#             )
+        # Format results
+        region_stats = []
+        for row in results:
+            region_stats.append(
+                {
+                    "region": row["region"],
+                    "order_count": row["order_count"],
+                    "first_order": row["first_order"].isoformat()
+                    if row["first_order"]
+                    else None,
+                    "last_order": row["last_order"].isoformat()
+                    if row["last_order"]
+                    else None,
+                }
+            )
 
-#         logger.info(
-#             f"   ✅ Retrieved region statistics for {len(region_stats)} regions"
-#         )
+        logger.info(
+            f"   ✅ Retrieved region statistics for {len(region_stats)} regions"
+        )
 
-#         return jsonify(
-#             {
-#                 "success": True,
-#                 "region_stats": region_stats,
-#                 "current_region": os.environ.get("REGION_NAME", "default"),
-#                 "provider": db_connector.get_provider_name(),
-#             }
-#         )
+        return jsonify(
+            {
+                "success": True,
+                "region_stats": region_stats,
+                "current_region": os.environ.get("REGION_NAME", "default"),
+                "provider": db_connector.get_provider_name(),
+            }
+        )
 
-#     except Exception as e:
-#         logger.error(f"Multi-region orders by region API error: {str(e)}")
-#         return jsonify({"error": str(e)}), 500
+    except Exception as e:
+        logger.error(f"Multi-region orders by region API error: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
-
-# @app.route("/api/test/multi-region/recent-orders")
-# def api_test_multi_region_recent_orders():
-#     """Get recent orders with region information for multi-region testing"""
-#     try:
-#         logger.info("🌍 Multi-region Recent Orders API called")
-
-#         limit = request.args.get("limit", 20, type=int)
-
-#         # Get recent orders with region information
-#         # Note: Changed 'no' alias to 'new_ord' to avoid Spanner reserved keyword conflict
-#         query = """
-#             SELECT 
-#                 o.o_id,
-#                 o.o_w_id,
-#                 o.o_d_id,
-#                 o.o_c_id,
-#                 o.o_entry_d,
-#                 COALESCE(o.region_created, 'unknown') as region_created,
-#                 c.c_first,
-#                 c.c_middle,
-#                 c.c_last,
-#                 CASE WHEN new_ord.no_o_id IS NOT NULL THEN 'New' ELSE 'Delivered' END as status
-#             FROM orders o
-#             JOIN customer c ON c.c_w_id = o.o_w_id AND c.c_d_id = o.o_d_id AND c.c_id = o.o_c_id
-#             LEFT JOIN new_order new_ord ON new_ord.no_w_id = o.o_w_id AND new_ord.no_d_id = o.o_d_id AND new_ord.no_o_id = o.o_id
-#             ORDER BY o.o_entry_d DESC
-#             LIMIT %s
-#         """
-
-#         results = db_connector.execute_query(query, (limit,))
-
-#         # Format results
-#         orders = []
-#         for row in results:
-#             orders.append(
-#                 {
-#                     "order_id": row["o_id"],
-#                     "warehouse_id": row["o_w_id"],
-#                     "district_id": row["o_d_id"],
-#                     "customer_id": row["o_c_id"],
-#                     "order_date": row["o_entry_d"].isoformat()
-#                     if row["o_entry_d"]
-#                     else None,
-#                     "region_created": row["region_created"],
-#                     "customer_name": f"{row['c_first']} {row['c_middle']} {row['c_last']}",
-#                     "status": row["status"],
-#                 }
-#             )
-
-#         logger.info(
-#             f"   ✅ Retrieved {len(orders)} recent orders with region information"
-#         )
-
-#         return jsonify(
-#             {
-#                 "success": True,
-#                 "orders": orders,
-#                 "current_region": os.environ.get("REGION_NAME", "default"),
-#                 "provider": db_connector.get_provider_name(),
-#             }
-#         )
-
-#     except Exception as e:
-#         logger.error(f"Multi-region recent orders API error: {str(e)}")
-#         return jsonify({"error": str(e)}), 500
 
 @app.route("/api/test/multi-region/recent-orders")
 def api_test_multi_region_recent_orders():
-    """Get recent orders with region metadata for multi-region testing"""
+    """Get recent orders with region information for multi-region testing"""
     try:
         logger.info("🌍 Multi-region Recent Orders API called")
 
         limit = request.args.get("limit", 20, type=int)
 
-        # Query without o.region_created
+        # Get recent orders with region information
+        # Note: Changed 'no' alias to 'new_ord' to avoid Spanner reserved keyword conflict
         query = """
             SELECT 
                 o.o_id,
@@ -932,28 +867,21 @@ def api_test_multi_region_recent_orders():
                 o.o_d_id,
                 o.o_c_id,
                 o.o_entry_d,
+                COALESCE(o.region_created, 'unknown') as region_created,
                 c.c_first,
                 c.c_middle,
                 c.c_last,
                 CASE WHEN new_ord.no_o_id IS NOT NULL THEN 'New' ELSE 'Delivered' END as status
             FROM orders o
-            JOIN customer c 
-                ON c.c_w_id = o.o_w_id 
-               AND c.c_d_id = o.o_d_id 
-               AND c.c_id = o.o_c_id
-            LEFT JOIN new_order new_ord 
-                ON new_ord.no_w_id = o.o_w_id 
-               AND new_ord.no_d_id = o.o_d_id 
-               AND new_ord.no_o_id = o.o_id
+            JOIN customer c ON c.c_w_id = o.o_w_id AND c.c_d_id = o.o_d_id AND c.c_id = o.o_c_id
+            LEFT JOIN new_order new_ord ON new_ord.no_w_id = o.o_w_id AND new_ord.no_d_id = o.o_d_id AND new_ord.no_o_id = o.o_id
             ORDER BY o.o_entry_d DESC
             LIMIT %s
         """
 
         results = db_connector.execute_query(query, (limit,))
 
-        current_region = os.environ.get("REGION_NAME", "default")
-
-        # Format results and inject region metadata
+        # Format results
         orders = []
         for row in results:
             orders.append(
@@ -962,22 +890,23 @@ def api_test_multi_region_recent_orders():
                     "warehouse_id": row["o_w_id"],
                     "district_id": row["o_d_id"],
                     "customer_id": row["o_c_id"],
-                    "order_date": row["o_entry_d"].isoformat() if row["o_entry_d"] else None,
-                    "region_created": current_region,  # inject from ENV instead of DB
+                    "order_date": row["o_entry_d"].isoformat()
+                    if row["o_entry_d"]
+                    else None,
+                    "region_created": row["region_created"],
                     "customer_name": f"{row['c_first']} {row['c_middle']} {row['c_last']}",
                     "status": row["status"],
                 }
             )
 
         logger.info(
-            f"   ✅ Retrieved {len(orders)} recent orders with region metadata"
+            f"   ✅ Retrieved {len(orders)} recent orders with region information"
         )
 
         return jsonify(
             {
                 "success": True,
                 "orders": orders,
-                "current_region": current_region,
                 "provider": db_connector.get_provider_name(),
             }
         )
@@ -985,7 +914,6 @@ def api_test_multi_region_recent_orders():
     except Exception as e:
         logger.error(f"Multi-region recent orders API error: {str(e)}")
         return jsonify({"error": str(e)}), 500
-
 
 @app.route("/api/dashboard-metrics")
 def dashboard_metrics():

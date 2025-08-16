@@ -116,13 +116,12 @@ class OrderService:
         3. Mark order as multi-region if items come from different warehouses
         """
         try:
-            print("🛒 [START] Creating new order")
             logger.info(
                 f"🛒 Creating new order: warehouse_id={warehouse_id}, district_id={district_id}, "
                 f"customer_id={customer_id}, items={len(items)}"
             )
-            print(f"➡️ Params - W_ID: {warehouse_id}, D_ID: {district_id}, C_ID: {customer_id}, Items: {len(items)}")
-
+            region_created = os.getenv("REGION_NAME", "default")  
+ 
             # 🔍 Validate item fields
             for idx, item in enumerate(items, 1):
                 print(f"🔍 Validating item {idx}: {item}")
@@ -143,9 +142,7 @@ class OrderService:
                 1 for item in items if item.get("warehouse_id", warehouse_id) == warehouse_id
             )
             all_local = 1 if local_items == len(items) else 0
-            print(f"📊 Local items: {local_items}, All local: {all_local}")
             
-            print(f"Running query to get next order ID for W_ID={warehouse_id}, D_ID={district_id}")
             # 🆔 Generate new order ID
             order_id_result = self.db.fetch_one(
                 """
@@ -155,12 +152,10 @@ class OrderService:
                 """,
                 (warehouse_id, district_id),
             )
-            print(f"order_id_result: {order_id_result}")  # Debug output
             if not order_id_result or 'next_order_id' not in order_id_result:
                 raise RuntimeError("Failed to fetch new order id")
 
             order_id = order_id_result['next_order_id']
-            print(f"🆔 New Order ID: {order_id}")
 
             # 📝 Insert into orders table
             order_entry_d = datetime.utcnow()
@@ -168,8 +163,8 @@ class OrderService:
                 """
                 INSERT INTO orders (
                     o_id, o_d_id, o_w_id, o_c_id,
-                    o_entry_d, o_carrier_id, o_ol_cnt, o_all_local
-                ) VALUES (%s, %s, %s, %s, %s, NULL, %s, %s)
+                    o_entry_d, o_carrier_id, o_ol_cnt, o_all_local,region_created
+                ) VALUES (%s, %s, %s, %s, %s, NULL, %s, %s,%s)
                 """,
                 (
                     order_id,
@@ -179,9 +174,9 @@ class OrderService:
                     order_entry_d,
                     len(items),
                     all_local,
+                    region_created
                 ),
             )
-            print("✅ Inserted order into 'orders' table")
 
             # 📥 Insert order_lines
             for line_number, item in enumerate(items, 1):
@@ -199,8 +194,6 @@ class OrderService:
 
                 amount = quantity * item_price
                 ol_dist_info = "DEFAULT DIST INFO".ljust(24)[:24]  # exactly 24 chars
-
-                print(f"📦 Inserting line {line_number}: item_id={item_id}, quantity={quantity}, price={item_price}, amount={amount}")
 
                 self.db.execute_query(
                     """
@@ -223,7 +216,6 @@ class OrderService:
                 )
 
             logger.info(f"✅ Order {order_id} created successfully")
-            print(f"✅ Order {order_id} created successfully")
 
             return {
                 "success": True,
@@ -238,82 +230,8 @@ class OrderService:
         except Exception as e:
             import traceback
             error_message = str(e) or "Unexpected error"
-            print(f"❌ Exception occurred: {error_message}")
-            print(traceback.format_exc())
             logger.error(f"❌ New order service error: {error_message}\n{traceback.format_exc()}")
             return {"success": False, "error": error_message}
-
-    # def get_orders(self, warehouse_id=None, district_id=None, customer_id=None, status=None, limit=50, offset=0):
-    #     try:
-    #         # Base query
-    #         query = """
-    #             SELECT *,
-    #                 CASE 
-    #                     WHEN o_carrier_id IS NULL THEN 'New'
-    #                     ELSE 'Delivered'
-    #                 END AS status
-    #             FROM orders
-    #             WHERE (%(warehouse_id)s IS NULL OR o_w_id = %(warehouse_id)s)
-    #             AND (%(district_id)s IS NULL OR o_d_id = %(district_id)s)
-    #             AND (%(customer_id)s IS NULL OR o_c_id = %(customer_id)s)
-    #         """
-    #         if status and status.lower() == "new":
-    #             query += " AND o_carrier_id IS NULL"
-    #         elif status and status.lower() == "delivered":
-    #             query += " AND o_carrier_id IS NOT NULL"
-
-    #         # Order & pagination
-    #         query += " ORDER BY o_entry_d DESC LIMIT %(limit)s OFFSET %(offset)s"
-
-    #         params = {
-    #             "warehouse_id": warehouse_id,
-    #             "district_id": district_id,
-    #             "customer_id": customer_id,
-    #             "status": status,
-    #             "limit": limit,
-    #             "offset": offset,
-    #         }
-
-    #         # Debug print query & params
-    #         print("📌 Orders Query:", query)
-    #         print("📌 Params:", params)
-
-    #         # Fetch orders
-    #         with self.db.cursor(dictionary=True) as cursor:
-    #             cursor.execute(query, params)
-    #             orders = cursor.fetchall()
-
-    #         # Count query
-    #         count_query = """
-    #             SELECT COUNT(*) AS total
-    #             FROM orders
-    #             WHERE (%(warehouse_id)s IS NULL OR o_w_id = %(warehouse_id)s)
-    #             AND (%(district_id)s IS NULL OR o_d_id = %(district_id)s)
-    #             AND (%(customer_id)s IS NULL OR o_c_id = %(customer_id)s)
-    #         """
-    #         if status and status.lower() == "new":
-    #             count_query += " AND o_carrier_id IS NULL"
-    #         elif status and status.lower() == "delivered":
-    #             count_query += " AND o_carrier_id IS NOT NULL"
-
-    #         # Debug print count query
-    #         print("📌 Count Query:", count_query)
-
-    #         with self.db.cursor(dictionary=True) as cursor:
-    #             cursor.execute(count_query, params)
-    #             total_count = cursor.fetchone()["total"]
-
-    #         return {
-    #             "orders": orders,
-    #             "total_count": total_count,
-    #             "has_prev": offset > 0,
-    #             "has_next": offset + limit < total_count
-    #         }
-
-    #     except Exception as e:
-    #         logger.error(f"❌ Error in get_orders: {str(e)}")
-    #         raise
-
 
     def get_orders(self, warehouse_id=None, district_id=None, customer_id=None, status=None, limit=50, offset=0):
         try:
