@@ -258,7 +258,6 @@ def inventory():
       
         # Calculate total inventory value (safe key access)
         total_value = sum(item.get('s_quantity', 0) for item in inventory_list)
-        print(total_value)
         # Calculate pagination info
         total_pages = (total_count + limit - 1) // limit if total_count > 0 else 1
         pagination = {
@@ -578,7 +577,11 @@ def api_stock_level(warehouse_id: int, district_id: int):
     try:
         threshold = request.args.get("threshold", 10, type=int)
   
-        low_stock_items = inventory_service.get_low_stock_items(warehouse_id,district_id, threshold=threshold)
+        low_stock_items = inventory_service.get_low_stock_items(
+            warehouse_id=warehouse_id,
+            district_id=district_id,
+            threshold=threshold
+        )
 
         response = {
             "success": True,
@@ -593,6 +596,7 @@ def api_stock_level(warehouse_id: int, district_id: int):
     except Exception as e:
         logger.error(f"Stock level API error: {str(e)}")
         return jsonify({"success": False, "error": str(e)}), 500
+
 
 
 
