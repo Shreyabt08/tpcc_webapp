@@ -389,9 +389,10 @@
                 </form>
                 <div id="deliveryResult" class="mt-3"></div>
             </div>
+            
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="executeDelivery()">
+                <button type="button" class="btn btn-primary" onclick="executeDelivery(event)">
                     <i class="bi bi-truck"></i> Process Delivery
                 </button>
             </div>
@@ -470,77 +471,7 @@ function submitPayment() {
         });
 }
 
-// function viewCustomerPayments(warehouseId, districtId, customerId) {
-//     const modal = new bootstrap.Modal(document.getElementById('customerPaymentsModal'));
-//     const content = document.getElementById('customerPaymentsContent');
-    
-//     showLoading(content);
-//     modal.show();
-    
-//     // Filter current payments for this customer
-//     const customerPayments = Array.from(document.querySelectorAll('tbody tr')).filter(row => {
-//         const rowWarehouse = parseInt(row.cells[2].textContent);
-//         const rowDistrict = parseInt(row.cells[3].textContent);
-//         const rowCustomerId = parseInt(row.cells[1].querySelector('small').textContent.replace('ID: ', ''));
-        
-//         return rowWarehouse === warehouseId && rowDistrict === districtId && rowCustomerId === customerId;
-//     });
-    
-//     if (customerPayments.length > 0) {
-//         const firstPayment = customerPayments[0];
-//         const customerName = firstPayment.cells[1].querySelector('div').textContent;
-        
-//         let totalAmount = 0;
-//         const paymentRows = customerPayments.map(row => {
-//             const amount = parseFloat(row.cells[4].textContent.replace(/[$,]/g, ''));
-//             totalAmount += amount;
-            
-//             return `
-//                 <tr>
-//                     <td>${row.cells[0].innerHTML}</td>
-//                     <td>${row.cells[4].innerHTML}</td>
-//                     <td>${row.cells[5].textContent}</td>
-//                 </tr>
-//             `;
-//         }).join('');
-        
-//         content.innerHTML = `
-//             <div class="row mb-3">
-//                 <div class="col-md-6">
-//                     <h6>Customer Information</h6>
-//                     <p><strong>Name:</strong> ${customerName}</p>
-//                     <p><strong>Customer ID:</strong> ${customerId}</p>
-//                     <p><strong>Warehouse:</strong> ${warehouseId}</p>
-//                     <p><strong>District:</strong> ${districtId}</p>
-//                 </div>
-//                 <div class="col-md-6">
-//                     <h6>Payment Summary</h6>
-//                     <p><strong>Total Payments:</strong> ${customerPayments.length}</p>
-//                     <p><strong>Total Amount:</strong> $${totalAmount.toFixed(2)}</p>
-//                     <p><strong>Average Payment:</strong> $${(totalAmount / customerPayments.length).toFixed(2)}</p>
-//                 </div>
-//             </div>
-            
-//             <h6>Payment History</h6>
-//             <div class="table-responsive">
-//                 <table class="table table-sm">
-//                     <thead>
-//                         <tr>
-//                             <th>Date</th>
-//                             <th>Amount</th>
-//                             <th>Description</th>
-//                         </tr>
-//                     </thead>
-//                     <tbody>
-//                         ${paymentRows}
-//                     </tbody>
-//                 </table>
-//             </div>
-//         `;
-//     } else {
-//         content.innerHTML = '<div class="alert alert-info">No payment history found for this customer.</div>';
-//     }
-// }
+
 
 function viewCustomerPayments(warehouseId, districtId, customerId) {
     const modal = new bootstrap.Modal(document.getElementById('customerPaymentsModal'));
@@ -608,70 +539,98 @@ function viewCustomerPayments(warehouseId, districtId, customerId) {
 }
 
 
-function executeDelivery() {
-    const warehouseId = parseInt(document.getElementById('delivery_warehouse_id').value);
-    const carrierId = parseInt(document.getElementById('delivery_carrier_id').value);
-    const resultDiv = document.getElementById('deliveryResult');
-    
+async function executeDelivery(event) {
+    if (event) event.preventDefault();
+
+    const warehouseId = document.getElementById("delivery_warehouse_id").value;
+    const carrierId = document.getElementById("delivery_carrier_id").value;
+    const resultDiv = document.getElementById("deliveryResult");
+    const btn = event?.target || document.querySelector("#deliveryModal .btn-primary");
+
     if (!warehouseId || !carrierId) {
-        alert('Please fill in all required fields');
+        resultDiv.innerHTML = `
+            <div class="alert alert-danger mt-2">
+                ⚠️ Please select a warehouse and enter a valid carrier ID.
+            </div>
+        `;
         return;
     }
-    
-    if (carrierId < 1 || carrierId > 10) {
-        alert('Carrier ID must be between 1 and 10');
-        return;
-    }
-    
-    const deliveryData = {
-        warehouse_id: warehouseId,
-        carrier_id: carrierId
-    };
-    
-    // Show loading
-    const submitBtn = event.target;
-    const originalText = submitBtn.innerHTML;
-    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Processing...';
-    submitBtn.disabled = true;
-    
-    showLoading(resultDiv);
-    
-    makeRequest('/api/delivery', 'POST', deliveryData)
-        .then(response => {
-            if (response.success) {
-                const deliveredOrders = response.delivered_orders || [];
-                const ordersList = deliveredOrders.map(order => 
-                    `<li>District ${order.district_id}, Order ${order.order_id}, Customer ${order.customer_id} - $${order.amount.toFixed(2)}</li>`
-                ).join('');
-                
-                resultDiv.innerHTML = `
-                    <div class="alert alert-success">
-                        <h6><i class="bi bi-truck"></i> Delivery Processed Successfully</h6>
-                        <p><strong>Warehouse:</strong> ${response.warehouse_id}</p>
-                        <p><strong>Carrier:</strong> ${response.carrier_id}</p>
-                        <p><strong>Orders Delivered:</strong> ${deliveredOrders.length}</p>
-                        ${deliveredOrders.length > 0 ? `
+
+    btn.disabled = true;
+
+    // Show spinner
+    resultDiv.innerHTML = `
+        <div class="d-flex justify-content-center mt-3">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Processing...</span>
+            </div>
+            <span class="ms-2">Processing delivery...</span>
+        </div>
+    `;
+
+    try {
+        const response = await fetch("/api/delivery", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                warehouse_id: parseInt(warehouseId),
+                carrier_id: parseInt(carrierId)
+            })
+        });
+
+        const data = await response.json();
+        console.log("Delivery Response:", data);
+
+        if (data.success) {
+            const deliveredOrders = data.delivered_orders || [];
+
+            const ordersList = deliveredOrders.length > 0
+                ? deliveredOrders.map(order =>
+                    `<li class="list-group-item">
+                        District ${order.district_id}, 
+                        Order ${order.order_id}, 
+                        Customer ${order.customer_id} 
+                        - $${order.amount.toFixed(2)}
+                    </li>`
+                  ).join('')
+                : "";
+
+            resultDiv.innerHTML = `
+                <div class="alert alert-success mt-3 shadow-sm rounded">
+                    <h6><i class="bi bi-truck"></i> Delivery Processed Successfully</h6>
+                    <p><strong>Warehouse:</strong> ${data.warehouse_id}</p>
+                    <p><strong>Carrier:</strong> ${data.carrier_id}</p>
+                    <p><strong>Orders Delivered:</strong> ${deliveredOrders.length}</p>
+                    ${deliveredOrders.length > 0 
+                        ? `
                             <details>
                                 <summary>Delivered Orders</summary>
-                                <ul class="mt-2">${ordersList}</ul>
+                                <ul class="list-group mt-2">
+                                    ${ordersList}
+                                </ul>
                             </details>
-                        ` : '<p class="text-muted">No orders were ready for delivery.</p>'}
-                        <p><strong>Timestamp:</strong> ${new Date(response.timestamp).toLocaleString()}</p>
-                    </div>
-                `;
-                
-                // Auto-close modal after 5 seconds
-                setTimeout(() => {
-                    location.reload();
-                }, 5000);
-            } else {
-                showError(resultDiv, response.error || 'Delivery processing failed');
-            }
-        })
-        .finally(() => {
-            submitBtn.innerHTML = originalText;
-            submitBtn.disabled = false;
-        });
+                          `
+                        : `<p class="text-muted">No orders were ready for delivery.</p>`}
+                    <p class="text-muted mt-2"><small><strong>Timestamp:</strong> ${new Date(data.timestamp).toLocaleString()}</small></p>
+                </div>
+            `;
+        } else {
+            resultDiv.innerHTML = `
+                <div class="alert alert-danger mt-3">
+                    <strong>Error:</strong> ${data.error || "Delivery failed"}
+                </div>
+            `;
+        }
+    } catch (err) {
+        console.error("Delivery request failed:", err);
+        resultDiv.innerHTML = `
+            <div class="alert alert-danger mt-3">
+                <strong>Error:</strong> Could not process delivery.
+            </div>
+        `;
+    } finally {
+        btn.disabled = false;
+    }
 }
 
 // Auto-refresh payment data every 60 seconds
@@ -684,5 +643,6 @@ setInterval(function() {
         }
     }
 }, 60000);
+
 </script>
 {% endblock %}

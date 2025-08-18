@@ -434,63 +434,6 @@ function submitNewOrder() {
 }
 
 
-// function submitNewOrder() {
-//     const form = document.getElementById('newOrderForm');
-//     const warehouseId = parseInt(document.getElementById('new_warehouse_id').value);
-//     const districtId = parseInt(document.getElementById('new_district_id').value);
-//     const customerId = parseInt(document.getElementById('new_customer_id').value);
-    
-//     if (!warehouseId || !districtId || !customerId) {
-//         alert('Please fill in all required fields');
-//         return;
-//     }
-    
-//     const items = [];
-//     const orderItems = document.querySelectorAll('.order-item');
-    
-//     for (let item of orderItems) {
-//         const itemId = parseInt(item.querySelector('.item-id').value);
-//         const quantity = parseInt(item.querySelector('.item-quantity').value);
-        
-//         if (!itemId || !quantity) {
-//             alert('Please fill in all item details');
-//             return;
-//         }
-        
-//         items.push({
-//             i_id: itemId,
-//             quantity: quantity
-//         });
-//     }
-    
-//     const orderData = {
-//         warehouse_id: warehouseId,
-//         district_id: districtId,
-//         customer_id: customerId,
-//         items: items
-//     };
-    
-//     // Show loading
-//     const submitBtn = event.target;
-//     const originalText = submitBtn.innerHTML;
-//     submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Creating...';
-//     submitBtn.disabled = true;
-    
-//     makeRequest('/api/new-order', 'POST', orderData)
-//         .then(response => {
-//             if (response.success) {
-//                 alert('Order created successfully! Order ID: ' + response.order_id);
-//                 location.reload();
-//             } else {
-//                 alert('Error creating order: ' + (response.error || 'Unknown error'));
-//             }
-//         })
-//         .finally(() => {
-//             submitBtn.innerHTML = originalText;
-//             submitBtn.disabled = false;
-//         });
-// }
-
 function viewOrderStatus(warehouseId, districtId, customerId) {
     const modal = new bootstrap.Modal(document.getElementById('orderStatusModal'));
     const content = document.getElementById('orderStatusContent');

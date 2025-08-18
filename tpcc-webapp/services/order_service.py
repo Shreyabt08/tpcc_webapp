@@ -21,7 +21,80 @@ class OrderService:
     ):
         self.db = db_connector
         # Get region name from environment variable or use default
-        self.region_name = region_name or os.environ.get("REGION_NAME", "us-east-1")
+        self.region_name = region_name or os.environ.get("REGION_NAME")
+
+    # def execute_delivery(self, warehouse_id: int, carrier_id: int):
+    #     """
+    #     Executes the TPC-C delivery transaction for a warehouse.
+    #     - warehouse_id: Warehouse ID
+    #     - carrier_id: Carrier ID (1–10)
+    #     """
+    #     delivered_count = 0
+
+    #     for _ in range(1, 11):  
+            
+    #         # 1. Get the oldest undelivered order for this warehouse
+    #         orders = self.db.execute_query("""
+    #             SELECT o_id, o_c_id, o_d_id
+    #             FROM orders
+    #             WHERE o_w_id = %s
+    #             AND o_carrier_id IS NULL
+    #             ORDER BY o_id ASC
+    #             LIMIT 1
+    #         """, (warehouse_id,))   # must be a tuple!
+
+    #         if not orders:
+    #             continue   # no undelivered orders left
+
+    #         order_id = orders[0]['o_id']
+    #         customer_id = orders[0]['o_c_id']
+    #         district_id = orders[0]['o_d_id']   # get district from order
+
+    #         # 2. Update order's carrier ID
+    #         self.db.execute_query("""
+    #             UPDATE orders
+    #             SET o_carrier_id = %s
+    #             WHERE o_w_id = %s
+    #             AND o_d_id = %s
+    #             AND o_id = %s
+    #         """, (carrier_id, warehouse_id, district_id, order_id))
+    #         print(f"   ✅ Updated carrier for Order {order_id}")
+
+    #         # 3. Update order lines' delivery date
+    #         self.db.execute_query("""
+    #             UPDATE order_line
+    #             SET ol_delivery_d = CURRENT_TIMESTAMP
+    #             WHERE ol_w_id = %s
+    #             AND ol_d_id = %s
+    #             AND ol_o_id = %s
+    #         """, (warehouse_id, district_id, order_id))
+
+    #         # 4. Calculate total amount from order lines
+    #         total_amount_result = self.db.execute_query("""
+    #             SELECT SUM(ol_amount) AS total_amount
+    #             FROM order_line
+    #             WHERE ol_w_id = %s
+    #             AND ol_d_id = %s
+    #             AND ol_o_id = %s
+    #         """, (warehouse_id, district_id, order_id))
+
+    #         total_amount = total_amount_result[0]['total_amount'] if total_amount_result else 0
+
+    #         # 5. Update customer balance and delivery count
+    #         self.db.execute_query("""
+    #             UPDATE customer
+    #             SET c_balance = c_balance + %s,
+    #                 c_delivery_cnt = c_delivery_cnt + 1
+    #             WHERE c_w_id = %s
+    #             AND c_d_id = %s
+    #             AND c_id = %s
+    #         """, (total_amount, warehouse_id, district_id, customer_id))
+
+    #         delivered_count += 1
+    #     # Commit changes after all updates
+    #     self.db.connection.commit()
+
+    #     return  delivered_count
 
     def execute_delivery(self, warehouse_id: int, carrier_id: int):
         """
@@ -29,30 +102,25 @@ class OrderService:
         - warehouse_id: Warehouse ID
         - carrier_id: Carrier ID (1–10)
         """
+        delivered_orders = []
 
-        print(f"🚚 Starting delivery process for Warehouse {warehouse_id} with Carrier {carrier_id}")
-
-        for district_id in range(1, 11):
-            print(f"\n📦 Processing District {district_id}")
-
-            # 1. Get the oldest undelivered order
+        for _ in range(1, 11):  
+            # 1. Get the oldest undelivered order for this warehouse
             orders = self.db.execute_query("""
-                SELECT o_id, o_c_id
+                SELECT o_id, o_c_id, o_d_id
                 FROM orders
                 WHERE o_w_id = %s
-                AND o_d_id = %s
                 AND o_carrier_id IS NULL
                 ORDER BY o_id ASC
                 LIMIT 1
-            """, (warehouse_id, district_id))
+            """, (warehouse_id,))
 
             if not orders:
-                print("   ➡ No undelivered orders found for this district.")
-                continue
+                continue  # no undelivered orders left
 
             order_id = orders[0]['o_id']
             customer_id = orders[0]['o_c_id']
-            print(f"   📝 Found Order ID {order_id} for Customer {customer_id}")
+            district_id = orders[0]['o_d_id']
 
             # 2. Update order's carrier ID
             self.db.execute_query("""
@@ -62,7 +130,6 @@ class OrderService:
                 AND o_d_id = %s
                 AND o_id = %s
             """, (carrier_id, warehouse_id, district_id, order_id))
-            print(f"   ✅ Updated carrier for Order {order_id}")
 
             # 3. Update order lines' delivery date
             self.db.execute_query("""
@@ -72,7 +139,6 @@ class OrderService:
                 AND ol_d_id = %s
                 AND ol_o_id = %s
             """, (warehouse_id, district_id, order_id))
-            print(f"   📅 Set delivery date for Order {order_id}")
 
             # 4. Calculate total amount from order lines
             total_amount_result = self.db.execute_query("""
@@ -84,7 +150,6 @@ class OrderService:
             """, (warehouse_id, district_id, order_id))
 
             total_amount = total_amount_result[0]['total_amount'] if total_amount_result else 0
-            print(f"   💰 Total amount for Order {order_id}: {total_amount}")
 
             # 5. Update customer balance and delivery count
             self.db.execute_query("""
@@ -95,11 +160,19 @@ class OrderService:
                 AND c_d_id = %s
                 AND c_id = %s
             """, (total_amount, warehouse_id, district_id, customer_id))
-            print(f"   👤 Updated Customer {customer_id} balance and delivery count")
+
+            # ➡️ Collect delivered order details for frontend
+            delivered_orders.append({
+                "order_id": order_id,
+                "customer_id": customer_id,
+                "district_id": district_id,
+                "amount": float(total_amount) if total_amount else 0.0
+            })
 
         # Commit changes after all updates
         self.db.connection.commit()
-        print("\n✅ Delivery process completed successfully.")
+
+        return delivered_orders
 
 
     def execute_new_order(
@@ -120,7 +193,7 @@ class OrderService:
                 f"🛒 Creating new order: warehouse_id={warehouse_id}, district_id={district_id}, "
                 f"customer_id={customer_id}, items={len(items)}"
             )
-            region_created = os.getenv("REGION_NAME", "default")  
+            region_created = os.getenv("REGION_NAME")  
  
             # 🔍 Validate item fields
             for idx, item in enumerate(items, 1):
