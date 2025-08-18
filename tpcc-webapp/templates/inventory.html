@@ -483,14 +483,14 @@ function executeStockLevelCheck() {
 }
 
 // Auto-refresh inventory data every 30 seconds - DISABLED for pagination testing
-// setInterval(function() {
-//     if (document.visibilityState === 'visible') {
-//         // Only refresh if no modals are open
-//         const modals = document.querySelectorAll('.modal.show');
-//         if (modals.length === 0) {
-//             location.reload();
-//         }
-//     }
-// }, 30000);
+setInterval(function() {
+    if (document.visibilityState === 'visible') {
+        // Only refresh if no modals are open
+        const modals = document.querySelectorAll('.modal.show');
+        if (modals.length === 0) {
+            location.reload();
+        }
+    }
+}, 30000);
 </script>
 {% endblock %}

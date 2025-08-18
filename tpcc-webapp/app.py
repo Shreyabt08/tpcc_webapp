@@ -577,7 +577,8 @@ def api_payment():
 def api_stock_level(warehouse_id: int, district_id: int):
     try:
         threshold = request.args.get("threshold", 10, type=int)
-        low_stock_items = inventory_service.get_low_stock_items(warehouse_id, threshold=threshold)
+  
+        low_stock_items = inventory_service.get_low_stock_items(warehouse_id,district_id, threshold=threshold)
 
         response = {
             "success": True,
