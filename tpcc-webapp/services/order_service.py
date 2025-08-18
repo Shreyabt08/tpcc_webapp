@@ -23,78 +23,6 @@ class OrderService:
         # Get region name from environment variable or use default
         self.region_name = region_name or os.environ.get("REGION_NAME")
 
-    # def execute_delivery(self, warehouse_id: int, carrier_id: int):
-    #     """
-    #     Executes the TPC-C delivery transaction for a warehouse.
-    #     - warehouse_id: Warehouse ID
-    #     - carrier_id: Carrier ID (1–10)
-    #     """
-    #     delivered_count = 0
-
-    #     for _ in range(1, 11):  
-            
-    #         # 1. Get the oldest undelivered order for this warehouse
-    #         orders = self.db.execute_query("""
-    #             SELECT o_id, o_c_id, o_d_id
-    #             FROM orders
-    #             WHERE o_w_id = %s
-    #             AND o_carrier_id IS NULL
-    #             ORDER BY o_id ASC
-    #             LIMIT 1
-    #         """, (warehouse_id,))   # must be a tuple!
-
-    #         if not orders:
-    #             continue   # no undelivered orders left
-
-    #         order_id = orders[0]['o_id']
-    #         customer_id = orders[0]['o_c_id']
-    #         district_id = orders[0]['o_d_id']   # get district from order
-
-    #         # 2. Update order's carrier ID
-    #         self.db.execute_query("""
-    #             UPDATE orders
-    #             SET o_carrier_id = %s
-    #             WHERE o_w_id = %s
-    #             AND o_d_id = %s
-    #             AND o_id = %s
-    #         """, (carrier_id, warehouse_id, district_id, order_id))
-    #         print(f"   ✅ Updated carrier for Order {order_id}")
-
-    #         # 3. Update order lines' delivery date
-    #         self.db.execute_query("""
-    #             UPDATE order_line
-    #             SET ol_delivery_d = CURRENT_TIMESTAMP
-    #             WHERE ol_w_id = %s
-    #             AND ol_d_id = %s
-    #             AND ol_o_id = %s
-    #         """, (warehouse_id, district_id, order_id))
-
-    #         # 4. Calculate total amount from order lines
-    #         total_amount_result = self.db.execute_query("""
-    #             SELECT SUM(ol_amount) AS total_amount
-    #             FROM order_line
-    #             WHERE ol_w_id = %s
-    #             AND ol_d_id = %s
-    #             AND ol_o_id = %s
-    #         """, (warehouse_id, district_id, order_id))
-
-    #         total_amount = total_amount_result[0]['total_amount'] if total_amount_result else 0
-
-    #         # 5. Update customer balance and delivery count
-    #         self.db.execute_query("""
-    #             UPDATE customer
-    #             SET c_balance = c_balance + %s,
-    #                 c_delivery_cnt = c_delivery_cnt + 1
-    #             WHERE c_w_id = %s
-    #             AND c_d_id = %s
-    #             AND c_id = %s
-    #         """, (total_amount, warehouse_id, district_id, customer_id))
-
-    #         delivered_count += 1
-    #     # Commit changes after all updates
-    #     self.db.connection.commit()
-
-    #     return  delivered_count
 
     def execute_delivery(self, warehouse_id: int, carrier_id: int):
         """
@@ -105,7 +33,6 @@ class OrderService:
         delivered_orders = []
 
         for _ in range(1, 11):  
-            # 1. Get the oldest undelivered order for this warehouse
             orders = self.db.execute_query("""
                 SELECT o_id, o_c_id, o_d_id
                 FROM orders
@@ -116,13 +43,12 @@ class OrderService:
             """, (warehouse_id,))
 
             if not orders:
-                continue  # no undelivered orders left
+                continue  
 
             order_id = orders[0]['o_id']
             customer_id = orders[0]['o_c_id']
             district_id = orders[0]['o_d_id']
 
-            # 2. Update order's carrier ID
             self.db.execute_query("""
                 UPDATE orders
                 SET o_carrier_id = %s
@@ -131,7 +57,6 @@ class OrderService:
                 AND o_id = %s
             """, (carrier_id, warehouse_id, district_id, order_id))
 
-            # 3. Update order lines' delivery date
             self.db.execute_query("""
                 UPDATE order_line
                 SET ol_delivery_d = CURRENT_TIMESTAMP
@@ -140,7 +65,6 @@ class OrderService:
                 AND ol_o_id = %s
             """, (warehouse_id, district_id, order_id))
 
-            # 4. Calculate total amount from order lines
             total_amount_result = self.db.execute_query("""
                 SELECT SUM(ol_amount) AS total_amount
                 FROM order_line
@@ -151,7 +75,6 @@ class OrderService:
 
             total_amount = total_amount_result[0]['total_amount'] if total_amount_result else 0
 
-            # 5. Update customer balance and delivery count
             self.db.execute_query("""
                 UPDATE customer
                 SET c_balance = c_balance + %s,
@@ -161,7 +84,6 @@ class OrderService:
                 AND c_id = %s
             """, (total_amount, warehouse_id, district_id, customer_id))
 
-            # ➡️ Collect delivered order details for frontend
             delivered_orders.append({
                 "order_id": order_id,
                 "customer_id": customer_id,
@@ -169,7 +91,6 @@ class OrderService:
                 "amount": float(total_amount) if total_amount else 0.0
             })
 
-        # Commit changes after all updates
         self.db.connection.commit()
 
         return delivered_orders
@@ -195,42 +116,36 @@ class OrderService:
             )
             region_created = os.getenv("REGION_NAME")  
  
-            # 🔍 Validate item fields
             for idx, item in enumerate(items, 1):
-                print(f"🔍 Validating item {idx}: {item}")
                 if "i_id" not in item or "quantity" not in item:
                     raise ValueError(f"Item {idx} is missing required fields: {item}")
                 logger.info(f"📦 Item {idx}: {item}")
 
-            # Ensure warehouse_id and district_id are ints
             warehouse_id = int(warehouse_id)
             district_id = int(district_id)
 
-            # Convert item warehouse_id to int if present, else default
             for item in items:
                 item['warehouse_id'] = int(item.get('warehouse_id', warehouse_id))
 
-            # ✅ Count local vs remote items
             local_items = sum(
                 1 for item in items if item.get("warehouse_id", warehouse_id) == warehouse_id
             )
             all_local = 1 if local_items == len(items) else 0
             
-            # 🆔 Generate new order ID
-            order_id_result = self.db.fetch_one(
-                """
-                SELECT COALESCE(MAX(o_id), 0) + 1 AS next_order_id
-                FROM orders
-                WHERE o_w_id = %s AND o_d_id = %s
-                """,
-                (warehouse_id, district_id),
-            )
-            if not order_id_result or 'next_order_id' not in order_id_result:
+            order_id_result = self.db.execute_query("""
+                    SELECT COALESCE(MAX(o_id), 0) + 1 AS next_order_id
+                    FROM orders
+                """)
+            if not order_id_result:
                 raise RuntimeError("Failed to fetch new order id")
 
-            order_id = order_id_result['next_order_id']
+            if isinstance(order_id_result[0], dict):
+                order_id = order_id_result[0]["next_order_id"]
 
-            # 📝 Insert into orders table
+            else:
+                order_id = order_id_result[0][0]
+
+
             order_entry_d = datetime.utcnow()
             self.db.execute_query(
                 """
@@ -251,13 +166,11 @@ class OrderService:
                 ),
             )
 
-            # 📥 Insert order_lines
             for line_number, item in enumerate(items, 1):
                 item_id = item["i_id"]
                 quantity = item["quantity"]
                 supply_w_id = item.get("warehouse_id", warehouse_id)
 
-                # Get item price
                 price_result = self.db.fetch_one(
                     "SELECT i_price FROM item WHERE i_id = %s", (item_id,)
                 )
@@ -266,7 +179,7 @@ class OrderService:
                 item_price = price_result["i_price"]
 
                 amount = quantity * item_price
-                ol_dist_info = "DEFAULT DIST INFO".ljust(24)[:24]  # exactly 24 chars
+                ol_dist_info = "DEFAULT DIST INFO".ljust(24)[:24]  
 
                 self.db.execute_query(
                     """
