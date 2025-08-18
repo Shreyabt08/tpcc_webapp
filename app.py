@@ -85,7 +85,7 @@ with app.app_context():
 def dashboard():
     """Main dashboard showing key metrics"""
     try:
-        logger.info("🏠 Dashboard page accessed")
+        logger.info("🏠 Dashboard page accessed prod")
         logger.info(f"   Database Provider: {db_connector.get_provider_name()}")
         logger.info(f"   ORM Available: {orm_available}")
 
